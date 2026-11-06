@@ -18,11 +18,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from paths import RES
 from reader_core import HERE, Reader
 from setup_check import Setup
+from version import VERSION
 
 PORT = 8765
 UI = os.path.join(RES, "ui", "index.html")
 reader = Reader()
 setup = Setup(lambda: reader.settings["local_model"])
+screen_req = [0]  # 앱 창의 '화면 번역' 버튼을 누른 횟수 — 화면 번역 프로세스가 보고 움직인다
 last_ping = [time.time()]
 
 
@@ -53,7 +55,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/state"):
             if "overlay" not in self.path:  # 자막 줄이 부르는 건 '앱 창 살아 있음'으로 치지 않는다
                 last_ping[0] = time.time()
-            self._json(reader.state())
+            self._json(state())
         else:
             self._json({"error": "없는 주소"}, 404)
 
@@ -78,11 +80,17 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/setup/pull":
             setup.pull_model()
             return self._json(setup.check())
+        elif self.path == "/api/screen":
+            screen_req[0] += 1
         elif self.path == "/api/open-logs":
             os.startfile(os.path.join(HERE, "logs"))
         else:
             return self._json({"error": "없는 주소"}, 404)
-        self._json(reader.state())
+        self._json(state())
+
+
+def state():
+    return {**reader.state(), "screen_req": screen_req[0], "version": VERSION}
 
 
 TITLE = "동영상 번역기"
@@ -96,6 +104,11 @@ def self_command(*args):
         return [sys.executable, *args]
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     return [pyw if os.path.exists(pyw) else sys.executable, os.path.abspath(__file__), *args]
+
+
+def open_screen():
+    """화면 번역(Ctrl+Shift+T) 담당. 앱과 같이 켜지고 같이 꺼진다."""
+    subprocess.Popen(self_command("--screen"), cwd=HERE)
 
 
 def open_overlay():
@@ -175,6 +188,9 @@ def main():
     if "--overlay" in sys.argv:
         from subtitle_overlay import main as overlay_main
         return overlay_main()
+    if "--screen" in sys.argv:
+        from screen_translate import main as screen_main
+        return screen_main()
     try:  # 작업 표시줄에서 python 이 아니라 '동영상 번역기'로 따로 묶이게
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
@@ -189,6 +205,7 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print("동영상 번역기:", url)
+    open_screen()
 
     if "--no-window" not in sys.argv and run_webview(url):
         pass  # WebView2 창이 닫혔다 → 끝

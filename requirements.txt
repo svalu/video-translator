@@ -1,5 +1,16 @@
+# 동영상 번역기 — Python 3.14 (Windows 11)
 uiautomation==2.0.29
 edge-tts==7.3.1
 comtypes==1.4.17
 pillow==13.0.0
-pyttsx3==2.99
+pywebview==6.2.1
+pythonnet==3.2.1
+winrt-runtime==4.1.0
+winrt-Windows.Foundation==4!10.0.28000.2957
+winrt-Windows.Foundation.Collections==4!10.0.28000.2957
+winrt-Windows.Globalization==4!10.0.28000.2957
+winrt-Windows.Graphics.Imaging==4!10.0.28000.2957
+winrt-Windows.Media.Ocr==4!10.0.28000.2957
+winrt-Windows.Storage.Streams==4!10.0.28000.2957
+# exe 로 묶을 때만
+pyinstaller==6.22.3

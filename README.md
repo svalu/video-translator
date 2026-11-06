@@ -48,6 +48,19 @@
 `자막읽어주기_시작.bat`은 **CP949**로 저장돼 있다(UTF-8로 저장하면 cmd에서 한글 줄이 깨져 명령이 안 된다). 고칠 땐 인코딩 유지.
 점검만: `자막읽어주기_시작.bat --check`
 
+## 다른 PC(집)에서 시작하기
+```
+git clone https://github.com/svalu/video-translator.git
+cd video-translator
+py -3.14 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\pythonw.exe app.py
+```
+- 처음 켜면 '준비 점검' 카드가 Ollama 설치·번역 모델 받기를 안내한다.
+- 설정·기록(`settings.json`, `logs/`)은 git 에 안 올라간다 — PC마다 따로.
+- exe 로 묶기: `.venv\Scripts\python.exe build_exe.py` → `dist\VideoTranslator_v{버전}.zip`
+- 버전: `version.py`. 기능 한 덩어리마다 올리고 git 태그(`v0.1`, `v0.2` …)를 붙인다.
+
 ## exe 로 쓰기·나눠 주기 (11/06)
 - 만들기: `.venv\Scripts\python.exe build_exe.py` → `dist\VideoTranslator\VideoTranslator.exe` (49MB 폴더) + `dist\VideoTranslator.zip` (25MB). 바탕화면·시작 메뉴 바로가기가 이 exe 를 가리킨다.
 - 앱 창 = WebView2 (pywebview). 제목줄·작업 표시줄 아이콘 = 메이커 마크. pywebview 가 없으면 예전 Edge 앱 모드로 대신 뜬다.

@@ -126,6 +126,10 @@ class Overlay:
         # hWndInsertAfter=글자판 → 배경판은 글자판 바로 아래. 0x0010 = SWP_NOACTIVATE
         w, h = rc.right - rc.left, rc.bottom - rc.top
         u.SetWindowPos(bg_h, top_h, rc.left, rc.top, w, h, 0x0010)
+        if not getattr(self, "_excluded", False):  # 화면 번역이 우리 자막을 영어로 착각해 읽지 않게: 캡처에서 빼기
+            for hwnd in (bg_h, top_h):
+                u.SetWindowDisplayAffinity(hwnd, 0x11)
+            self._excluded = True
         # 둥근 모서리: 두 창 모두 둥근 사각형 모양으로 자른다 (배경판 0% 일 때도 글자판 모양이 같게)
         scale = w / max(1, self.top.winfo_width())
         r = int(int(self.cfg.get("overlay_radius", 16)) * scale)
