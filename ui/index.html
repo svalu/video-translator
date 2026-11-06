@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20550%20550%22%3E%3Crect%20width%3D%22550%22%20height%3D%22550%22%20rx%3D%22120%22%20fill%3D%22%23111318%22/%3E%3Cpath%20fill%3D%22%23fff%22%20transform%3D%22translate%2855%2035%29%20scale%28.8%29%22%20d%3D%22M496.29%2C294.9l-163.29-163.29h146.06v-44H70.94v44h146.06L53.71%2C294.9l31.11%2C31.11%2C34.57-34.57c-1.83%2C9.61-2.8%2C19.52-2.8%2C29.66%2C0%2C87.34%2C71.06%2C158.4%2C158.4%2C158.4s158.4-71.06%2C158.4-158.4c0-10.13-.97-20.04-2.8-29.65l34.57%2C34.57%2C31.11-31.11ZM297%2C208.82c45.47%2C8.89%2C81.38%2C44.8%2C90.27%2C90.27h-90.27v-90.27ZM253%2C299.09h-90.27c8.89-45.47%2C44.8-81.38%2C90.27-90.27v90.27ZM162.73%2C343.09h90.27v90.27c-45.47-8.89-81.38-44.8-90.27-90.27ZM297%2C433.37v-90.27h90.27c-8.89%2C45.47-44.8%2C81.38-90.27%2C90.27ZM275%2C162.69c-10.13%2C0-20.04.97-29.65%2C2.8l29.65-29.65%2C29.65%2C29.65c-9.61-1.83-19.52-2.8-29.65-2.8Z%22/%3E%3C/svg%3E">
+<title>동영상 번역기</title>
+<style>
+/* 작은 세로 창. 회색 바탕 위 흰 카드, 파란 강조 (배지 대시보드와 같은 결) */
+:root {
+  --bg: #e9ebef; --panel: #ffffff; --panel-2: #f3f4f7; --ink: #111318; --ink-2: #5d6370;
+  --line: #e2e4ea; --blue: #1f6bff; --blue-soft: #dbe6ff; --night: #0f1014; --ok: #16a05a; --warn: #c77700;
+  --font: "Pretendard", "Pretendard Medium", "Malgun Gothic", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 500 14px/1.5 var(--font); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--panel); border-radius: 20px; padding: 16px; }
+.row { display: flex; align-items: center; gap: 10px; }
+.between { justify-content: space-between; }
+h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+.label { font-size: 11px; letter-spacing: 0.06em; color: var(--ink-2); font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-radius: 999px; background: var(--panel-2); font-size: 12px; font-weight: 600; color: var(--ink-2); max-width: 100%; }
+.pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-2); flex: none; }
+.pill.on i { background: var(--ok); } .pill.warn i { background: var(--warn); }
+.pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.go { width: 100%; height: 52px; border: 0; border-radius: 16px; font: 700 16px var(--font); cursor: pointer; background: var(--blue); color: #fff; }
+.go.stop { background: var(--night); }
+.now { background: var(--night); color: #fff; border-radius: 20px; padding: 16px; min-height: 120px; display: flex; flex-direction: column; gap: 8px; }
+.now .label { color: #a6abb8; }
+.now .ko { font-size: 19px; font-weight: 700; line-height: 1.45; }
+.now .en { font-size: 12.5px; color: #a6abb8; }
+.speaking-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); display: inline-block; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .speaking-dot { animation: none; } }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stat { background: var(--panel-2); border-radius: 14px; padding: 8px 10px; }
+.stat b { display: block; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--ink-2); }
+.set { display: flex; flex-direction: column; gap: 12px; }
+.field { display: grid; grid-template-columns: 82px 1fr 44px; align-items: center; gap: 10px; }
+.field label { font-size: 13px; font-weight: 600; }
+.field output { font-size: 12px; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--blue); }
+select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); font: 500 13px var(--font); padding: 0 8px; }
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 600; }
+.switch input { width: 40px; height: 22px; accent-color: var(--blue); }
+.btn { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); font: 600 13px var(--font); cursor: pointer; color: var(--ink); }
+.recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 210px; overflow: auto; }
+.recent li { border-top: 1px solid var(--line); padding-top: 8px; }
+.recent li:first-child { border-top: 0; padding-top: 0; }
+.recent .ko { font-size: 13.5px; }
+.recent .meta { font-size: 11px; color: var(--ink-2); display: flex; gap: 8px; }
+.hint { font-size: 12px; color: var(--ink-2); }
+.brand { gap: 8px; } .brand svg { color: var(--ink); }  /* 메이커 마크는 흰색·검은색만 */
+.setup { display: flex; flex-direction: column; gap: 10px; }
+.setup[hidden] { display: none; }
+.check { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; }
+.check .t { font-weight: 700; font-size: 13.5px; }
+.check .d { font-size: 12px; color: var(--ink-2); }
+.check .ok { color: var(--ok); } .check .no { color: #d93025; } .check .wa { color: var(--warn); }
+.btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+.btn.primary svg { width: 16px; height: 16px; }
+.bar { height: 6px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ink); width: 0; transition: width .4s; }
+.head-btns { display: flex; align-items: center; gap: 8px; }
+.ic { display: inline-flex; align-items: center; gap: 6px; }
+.ic svg { flex: none; }
+.go { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.go svg { width: 22px; height: 22px; }
+.icon-btn { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; padding: 0; }
+.icon-btn:hover { background: var(--panel-2); }
+.icon-btn[aria-pressed="true"] { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
+.sub-row { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 10px; }
+.sub-row > .ic { font-size: 13px; font-weight: 600; }
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper output { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
+.sw[aria-pressed="true"] { outline: 2px solid var(--blue); outline-offset: 2px; }
+.sw-custom { position: relative; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; border: 2px dashed var(--ink-2); display: inline-grid; place-items: center; color: var(--ink-2); cursor: pointer; }
+.sw-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.sw-custom svg { width: 14px; height: 14px; }
+.preview-wrap { border-radius: 14px; padding: 10px; background: repeating-conic-gradient(#d5d8de 0 25%, #eef0f3 0 50%) 0 0 / 16px 16px; }
+.preview { border-radius: 10px; padding: 10px 12px; text-align: center; }
+.preview .pk { font-weight: 700; line-height: 1.35; }
+.preview .pe { font-size: 11px; opacity: .7; margin-top: 2px; }
+.sub-head { display: flex; align-items: center; justify-content: space-between; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+</style>
+</head>
+<body>
+  <div class="row between">
+    <h1 class="ic brand" title="희랑이 만든 것"><svg viewBox="0 0 550 550" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M496.29,294.9l-163.29-163.29h146.06v-44H70.94v44h146.06L53.71,294.9l31.11,31.11,34.57-34.57c-1.83,9.61-2.8,19.52-2.8,29.66,0,87.34,71.06,158.4,158.4,158.4s158.4-71.06,158.4-158.4c0-10.13-.97-20.04-2.8-29.65l34.57,34.57,31.11-31.11ZM297,208.82c45.47,8.89,81.38,44.8,90.27,90.27h-90.27v-90.27ZM253,299.09h-90.27c8.89-45.47,44.8-81.38,90.27-90.27v90.27ZM162.73,343.09h90.27v90.27c-45.47-8.89-81.38-44.8-90.27-90.27ZM297,433.37v-90.27h90.27c-8.89,45.47-44.8,81.38-90.27,90.27ZM275,162.69c-10.13,0-20.04.97-29.65,2.8l29.65-29.65,29.65,29.65c-9.61-1.83-19.52-2.8-29.65-2.8Z"/></svg><span>동영상 번역기</span></h1>
+    <div class="head-btns">
+      <span class="pill" id="status"><i></i><span>대기 중</span></span>
+      <button class="icon-btn" id="setupBtn" type="button" title="준비 점검" aria-label="준비 점검" data-icon="Settings02"></button>
+    </div>
+  </div>
+
+  <section class="card setup" id="setup" hidden aria-labelledby="setupTitle">
+    <div class="row between"><span class="ic" id="setupTitle" style="font-weight:700">준비 점검</span>
+      <button class="icon-btn" id="setupRe" type="button" title="다시 점검" aria-label="다시 점검" data-icon="Refresh"></button></div>
+    <div id="checks"></div>
+    <div id="job" hidden><div class="bar"><i id="jobBar"></i></div><div class="hint" id="jobText" style="margin-top:4px"></div></div>
+    <div class="hint" id="setupHint"></div>
+  </section>
+
+  <button class="go" id="go" type="button">읽기 시작</button>
+
+  <section class="now" aria-live="polite">
+    <div class="row between"><span class="label">지금 읽는 문장</span><span id="spk"></span></div>
+    <div class="ko" id="nowKo">영상을 켜고 '읽기 시작'을 눌러.</div>
+    <div class="en" id="nowEn"></div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><b id="sSpoken">0</b><span>읽음</span></div>
+    <div class="stat"><b id="sDelay">0</b><span>평균 지연(초)</span></div>
+    <div class="stat"><b id="sDups">0</b><span>중복 버림</span></div>
+    <div class="stat"><b id="sFrags">0</b><span>토막 버림</span></div>
+  </section>
+
+  <section class="card set">
+    <div class="field">
+      <label for="rate" class="ic" data-icon="DashboardSpeed01">빠르기</label>
+      <input type="range" id="rate" min="150" max="300" step="5">
+      <output id="rateOut"></output>
+    </div>
+    <div class="field">
+      <label for="volume" class="ic" data-icon="VolumeHigh">음량</label>
+      <input type="range" id="volume" min="0" max="100" step="5">
+      <output id="volOut"></output>
+    </div>
+    <div class="field">
+      <label for="source" class="ic" data-icon="Translate">번역</label>
+      <select id="source">
+        <option value="local">내 PC (EXAONE 7.8B) · 번역기 앱 필요 없음</option>
+        <option value="translator">번역기 앱 (구글)</option>
+      </select>
+      <span></span>
+    </div>
+    <div class="field">
+      <label for="voice" class="ic" data-icon="TextToSpeach">목소리</label>
+      <select id="voice"></select>
+      <span></span>
+    </div>
+    <label class="switch">늦어지면 자동으로 빨라지기 <input type="checkbox" id="auto"></label>
+    <label class="switch">토막 문장 거르기 <input type="checkbox" id="frag"></label>
+    <div class="row between">
+      <button class="btn" id="test" type="button">목소리 들어보기</button>
+      <button class="btn" id="logs" type="button">기록 폴더 열기</button>
+    </div>
+  </section>
+
+  <section class="card set" aria-labelledby="subTitle">
+    <div class="sub-head">
+      <span class="ic" data-icon="Subtitle" id="subTitle" style="font-weight:700">자막 줄</span>
+      <button class="icon-btn" id="ovOn" type="button" aria-pressed="true" title="자막 줄 보이기/숨기기" aria-label="자막 줄 보이기/숨기기"></button>
+    </div>
+    <div class="preview-wrap"><div class="preview" id="pv"><div class="pk" id="pvKo">자막 줄은 이렇게 보여요</div><div class="pe" id="pvEn">This is how the subtitle bar looks</div></div></div>
+    <div class="sub-row">
+      <span class="ic">글자 크기</span>
+      <div class="stepper">
+        <button class="icon-btn" id="szDown" type="button" title="글자 작게" aria-label="글자 작게" data-icon="AArrowDown"></button>
+        <output id="szOut">22</output>
+        <button class="icon-btn" id="szUp" type="button" title="글자 크게" aria-label="글자 크게" data-icon="AArrowUp"></button>
+      </div>
+    </div>
+    <div class="sub-row">
+      <span class="ic" data-icon="PaintBucket">배경색</span>
+      <div class="swatches" id="swatches">
+        <label class="sw-custom" title="직접 고르기" data-icon="ColorPicker"><input type="color" id="bgCustom" aria-label="배경색 직접 고르기"></label>
+      </div>
+    </div>
+    <div class="sub-row">
+      <label class="ic" data-icon="Transparency" for="alpha">배경 불투명도</label>
+      <div class="row"><input type="range" id="alpha" min="0" max="100" step="2" style="flex:1"><output id="alphaOut" style="width:40px;text-align:right;font-size:12px;color:var(--ink-2)"></output></div>
+    </div>
+    <div class="sub-row">
+      <label class="ic" data-icon="Radius" for="radius">모서리</label>
+      <div class="row"><input type="range" id="radius" min="0" max="40" step="2" style="flex:1"><output id="radiusOut" style="width:40px;text-align:right;font-size:12px;color:var(--ink-2)"></output></div>
+    </div>
+    <div class="sub-row">
+      <span class="ic" data-icon="Languages">영어 원문</span>
+      <div><button class="icon-btn" id="ovEn" type="button" aria-pressed="true" title="영어 원문 보이기/숨기기" aria-label="영어 원문 보이기/숨기기"></button></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row between" style="margin-bottom:8px"><span class="label">최근에 읽은 문장</span><span class="hint">지연 = 들린 뒤 읽기까지</span></div>
+    <ul class="recent" id="recent"><li class="hint">아직 없어</li></ul>
+  </section>
+
+<script>
+const HI = {"CheckmarkCircle02": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M8 12.5L10.5 15L16 9\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "CancelCircle": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M14.9994 15L12 12.0003M12 12.0003L9 9M12 12.0003L9.00064 15M12 12.0003L15 9\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Alert02": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M13.9248 21H10.0752C5.44476 21 3.12955 21 2.27636 19.4939C1.42317 17.9879 2.60736 15.9914 4.97574 11.9985L6.90057 8.75333C9.17559 4.91778 10.3131 3 12 3C13.6869 3 14.8244 4.91777 17.0994 8.75332L19.0243 11.9985C21.3926 15.9914 22.5768 17.9879 21.7236 19.4939C20.8704 21 18.5552 21 13.9248 21Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M12 9V13\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M12.125 16.75H12M12.25 16.75C12.25 16.8881 12.1381 17 12 17C11.8619 17 11.75 16.8881 11.75 16.75C11.75 16.6119 11.8619 16.5 12 16.5C12.1381 16.5 12.25 16.6119 12.25 16.75Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Settings02": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M15.5 12C15.5 13.933 13.933 15.5 12 15.5C10.067 15.5 8.5 13.933 8.5 12C8.5 10.067 10.067 8.5 12 8.5C13.933 8.5 15.5 10.067 15.5 12Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M21.011 14.0965C21.5329 13.9558 21.7939 13.8854 21.8969 13.7508C22 13.6163 22 13.3998 22 12.9669V11.0332C22 10.6003 22 10.3838 21.8969 10.2493C21.7938 10.1147 21.5329 10.0443 21.011 9.90358C19.0606 9.37759 17.8399 7.33851 18.3433 5.40087C18.4817 4.86799 18.5509 4.60156 18.4848 4.44529C18.4187 4.28902 18.2291 4.18134 17.8497 3.96596L16.125 2.98673C15.7528 2.77539 15.5667 2.66972 15.3997 2.69222C15.2326 2.71472 15.0442 2.90273 14.6672 3.27873C13.208 4.73448 10.7936 4.73442 9.33434 3.27864C8.95743 2.90263 8.76898 2.71463 8.60193 2.69212C8.43489 2.66962 8.24877 2.77529 7.87653 2.98663L6.15184 3.96587C5.77253 4.18123 5.58287 4.28891 5.51678 4.44515C5.45068 4.6014 5.51987 4.86787 5.65825 5.4008C6.16137 7.3385 4.93972 9.37763 2.98902 9.9036C2.46712 10.0443 2.20617 10.1147 2.10308 10.2492C2 10.3838 2 10.6003 2 11.0332V12.9669C2 13.3998 2 13.6163 2.10308 13.7508C2.20615 13.8854 2.46711 13.9558 2.98902 14.0965C4.9394 14.6225 6.16008 16.6616 5.65672 18.5992C5.51829 19.1321 5.44907 19.3985 5.51516 19.5548C5.58126 19.7111 5.77092 19.8188 6.15025 20.0341L7.87495 21.0134C8.24721 21.2247 8.43334 21.3304 8.6004 21.3079C8.76746 21.2854 8.95588 21.0973 9.33271 20.7213C10.7927 19.2644 13.2088 19.2643 14.6689 20.7212C15.0457 21.0973 15.2341 21.2853 15.4012 21.3078C15.5682 21.3303 15.7544 21.2246 16.1266 21.0133L17.8513 20.034C18.2307 19.8187 18.4204 19.711 18.4864 19.5547C18.5525 19.3984 18.4833 19.132 18.3448 18.5991C17.8412 16.6616 19.0609 14.6226 21.011 14.0965Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"/></svg>", "Download04": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M16.9504 12.1817C17.1981 12.814 16.5076 13.5726 15.1267 15.0899C13.6702 16.6902 12.9201 17.4904 12 17.5C11.0799 17.4904 10.3298 16.6902 8.87331 15.0899C7.49239 13.5726 6.80193 12.814 7.04964 12.1817C7.05868 12.1586 7.06851 12.1359 7.0791 12.1135C7.34928 11.542 8.24477 11.5029 10 11.5002V4.99998C10 4.53501 10 4.30253 10.0511 4.11179C10.1898 3.59414 10.5941 3.1898 11.1118 3.05111C11.3025 3 11.535 3 12 3C12.4649 3 12.6974 3 12.8882 3.05111C13.4058 3.1898 13.8102 3.59414 13.9489 4.11179C14 4.30253 14 4.53501 14 4.99998V11.5002C15.7552 11.5029 16.6507 11.542 16.9209 12.1135C16.9315 12.1359 16.9413 12.1586 16.9504 12.1817Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M5.00006 21H19.0001\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Refresh": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M20.0092 2V5.13219C20.0092 5.42605 19.6418 5.55908 19.4537 5.33333C17.6226 3.2875 14.9617 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Radius": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M12 13.5C11.1716 13.5 10.5 12.8284 10.5 12C10.5 11.1716 11.1716 10.5 12 10.5C12.8284 10.5 13.5 11.1716 13.5 12C13.5 12.8284 12.8284 13.5 12 13.5Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M19.0007 12H14M19.0007 12C19.0007 11.4398 16.9999 10 16.9999 10M19.0007 12C19.0007 12.5602 16.9999 14 16.9999 14\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Subtitle": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M2.5 12C2.5 7.52166 2.5 5.28249 3.89124 3.89124C5.28249 2.5 7.52166 2.5 12 2.5C16.4783 2.5 18.7175 2.5 20.1088 3.89124C21.5 5.28249 21.5 7.52166 21.5 12C21.5 16.4783 21.5 18.7175 20.1088 20.1088C18.7175 21.5 16.4783 21.5 12 21.5C7.52166 21.5 5.28249 21.5 3.89124 20.1088C2.5 18.7175 2.5 16.4783 2.5 12Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M18 18H10\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M18 14H15M12 14H10\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "AArrowUp": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M4 14H10\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M18 8V17\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M2 18L6.05826 6.66218C6.37429 5.77927 7.62571 5.77927 7.94174 6.66219L12 18\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M14 11C14 11 16.946 7.00001 18 7C19.0541 6.99999 22 11 22 11\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "AArrowDown": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M2 18L6.05826 6.66218C6.37429 5.77927 7.62571 5.77927 7.94174 6.66219L12 18\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M4 14H10\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M18 16V7\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M14 13C14 13 16.946 17 18 17C19.0541 17 22 13 22 13\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "PaintBucket": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M19 12.1294L12.9388 18.207C11.1557 19.9949 10.2641 20.8889 9.16993 20.9877C8.98904 21.0041 8.80705 21.0041 8.62616 20.9877C7.53195 20.8889 6.64039 19.9949 4.85726 18.207L2.83687 16.1811C1.72104 15.0622 1.72104 13.2482 2.83687 12.1294M19 12.1294L10.9184 4.02587M19 12.1294H2.83687M10.9184 4.02587L2.83687 12.1294M10.9184 4.02587L8.89805 2\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M22 20C22 21.1046 21.1046 22 20 22C18.8954 22 18 21.1046 18 20C18 18.8954 20 17 20 17C20 17 22 18.8954 22 20Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Transparency": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M16 9C16 12.866 12.866 16 9 16C5.13401 16 2 12.866 2 9C2 5.13401 5.13401 2 9 2C12.866 2 16 5.13401 16 9Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M8.02593 15.6067C8.00876 15.4067 8 15.2044 8 15C8 11.134 11.134 8 15 8C15.2867 8 15.5693 8.01723 15.8469 8.05071M18.9969 9.25251C20.8121 10.5172 22 12.6199 22 15C22 18.866 18.866 22 15 22C12.6199 22 10.5172 20.8121 9.25251 18.9969\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M6.5 2.5L15.5 11.5M2.5 6.5L11.5 15.5\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>", "Languages": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M3.49744 5H7.99744M7.99744 5H13.4974M7.99744 5V3.5M4.99744 13.5C7.49744 11.5 10.4974 7.5 10.9974 5M6.49744 7.5C6.99744 9 8.99744 11.5 9.99744 12\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M4.99744 13.5C7.49744 11.5 10.4974 7.5 10.9974 5\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M11.4974 20.5005L14.1591 14.2898C14.9451 12.456 15.338 11.5391 15.9974 11.5391C16.6568 11.5391 17.0498 12.456 17.8357 14.2898L20.4974 20.5005\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M13.4974 16.5H18.4974\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "View": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M21.544 11.045C21.848 11.4713 22 11.6845 22 12C22 12.3155 21.848 12.5287 21.544 12.955C20.1779 14.8706 16.6892 19 12 19C7.31078 19 3.8221 14.8706 2.45604 12.955C2.15201 12.5287 2 12.3155 2 12C2 11.6845 2.15201 11.4713 2.45604 11.045C3.8221 9.12944 7.31078 5 12 5C16.6892 5 20.1779 9.12944 21.544 11.045Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15C13.6569 15 15 13.6569 15 12Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>", "ViewOff": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M22 8C22 8 18 14 12 14C6 14 2 8 2 8\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"/><path d=\"M15 13.5L16.5 16\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M20 11L22 13\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M2 13L4 11\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M9 13.5L7.5 16\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Play": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M18.8906 12.846C18.5371 14.189 16.8667 15.138 13.5257 17.0361C10.296 18.8709 8.6812 19.7884 7.37983 19.4196C6.8418 19.2671 6.35159 18.9776 5.95624 18.5787C5 17.6139 5 15.7426 5 12C5 8.2574 5 6.3861 5.95624 5.42132C6.35159 5.02245 6.8418 4.73288 7.37983 4.58042C8.6812 4.21165 10.296 5.12907 13.5257 6.96393C16.8667 8.86197 18.5371 9.811 18.8906 11.154C19.0365 11.7084 19.0365 12.2916 18.8906 12.846Z\" stroke=\"currentColor\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Stop": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M4 12C4 8.72077 4 7.08116 4.81382 5.91891C5.1149 5.48891 5.48891 5.1149 5.91891 4.81382C7.08116 4 8.72077 4 12 4C15.2792 4 16.9188 4 18.0811 4.81382C18.5111 5.1149 18.8851 5.48891 19.1862 5.91891C20 7.08116 20 8.72077 20 12C20 15.2792 20 16.9188 19.1862 18.0811C18.8851 18.5111 18.5111 18.8851 18.0811 19.1862C16.9188 20 15.2792 20 12 20C8.72077 20 7.08116 20 5.91891 19.1862C5.48891 18.8851 5.1149 18.5111 4.81382 18.0811C4 16.9188 4 15.2792 4 12Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>", "VolumeHigh": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M14 14.8135V9.18646C14 6.04126 14 4.46866 13.0747 4.0773C12.1494 3.68593 11.0603 4.79793 8.88232 7.02192C7.75439 8.17365 7.11085 8.42869 5.50604 8.42869C4.10257 8.42869 3.40084 8.42869 2.89675 8.77262C1.85035 9.48655 2.00852 10.882 2.00852 12C2.00852 13.118 1.85035 14.5134 2.89675 15.2274C3.40084 15.5713 4.10257 15.5713 5.50604 15.5713C7.11085 15.5713 7.75439 15.8264 8.88232 16.9781C11.0603 19.2021 12.1494 20.3141 13.0747 19.9227C14 19.5313 14 17.9587 14 14.8135Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M17 9C17.6254 9.81968 18 10.8634 18 12C18 13.1366 17.6254 14.1803 17 15\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M20 7C21.2508 8.36613 22 10.1057 22 12C22 13.8943 21.2508 15.6339 20 17\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "TextToSpeach": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M13 9L13 17\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M17 7L17 19\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M21 11L21 15\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M9 15V21\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M5 15V17\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M7.5 3.5V11M7.5 11H6M7.5 11H9M12 4.5C12 3.67157 11.3284 3 10.5 3H4.5C3.67157 3 3 3.67157 3 4.5\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Translate": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M5 5.82759H7.7M11 5.82759H9.5M7.7 5.82759H9.5M7.7 5.82759V5M9.5 5.82759C9.18351 6.95937 8.52075 8.02923 7.76429 8.96946M5.83571 11C6.44723 10.4377 7.13788 9.74802 7.76429 8.96946M7.76429 8.96946C7.37857 8.51724 6.83857 7.78558 6.68429 7.45455M7.76429 8.96946L8.92143 10.1724\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M13.5 19L14.3333 17M18.5 19L17.6667 17M14.3333 17L16 13L17.6667 17M14.3333 17H17.6667\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M14 10V8C14 5.17157 14 3.75736 13.1213 2.87868C12.2426 2 10.8284 2 8 2C5.17157 2 3.75736 2 2.87868 2.87868C2 3.75736 2 5.17157 2 8C2 10.8284 2 12.2426 2.87868 13.1213C3.75736 14 5.17157 14 8 14H10\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"/><path d=\"M10 16C10 13.1716 10 11.7574 10.8787 10.8787C11.7574 10 13.1716 10 16 10C18.8284 10 20.2426 10 21.1213 10.8787C22 11.7574 22 13.1716 22 16C22 18.8284 22 20.2426 21.1213 21.1213C20.2426 22 18.8284 22 16 22C13.1716 22 11.7574 22 10.8787 21.1213C10 20.2426 10 18.8284 10 16Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M4 16.5C4 17.9045 4 18.6067 4.33706 19.1111C4.48298 19.3295 4.67048 19.517 4.88886 19.6629C5.39331 20 6.09554 20 7.5 20\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M20 7.5C20 6.09554 20 5.39331 19.6629 4.88886C19.517 4.67048 19.3295 4.48298 19.1111 4.33706C18.6067 4 17.9045 4 16.5 4\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "DashboardSpeed01": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M13.5 13L17 9M14 15C14 16.1046 13.1046 17 12 17C10.8954 17 10 16.1046 10 15C10 13.8954 10.8954 13 12 13C13.1046 13 14 13.8954 14 15Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"/><path d=\"M6 12C6 8.68629 8.68629 6 12 6C13.0929 6 14.1175 6.29218 15 6.80269\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"/><path d=\"M2.50006 12.0001C2.50006 7.52172 2.50006 5.28255 3.8913 3.8913C5.28255 2.50006 7.52172 2.50006 12.0001 2.50006C16.4784 2.50006 18.7176 2.50006 20.1088 3.8913C21.5001 5.28255 21.5001 7.52172 21.5001 12.0001C21.5001 16.4784 21.5001 18.7176 20.1088 20.1088C18.7176 21.5001 16.4784 21.5001 12.0001 21.5001C7.52172 21.5001 5.28255 21.5001 3.8913 20.1088C2.50006 18.7176 2.50006 16.4784 2.50006 12.0001Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>", "Scissor": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M21 6C21 7.65685 19.6569 9 18 9C16.3431 9 15 7.65685 15 6C15 4.34315 16.3431 3 18 3C19.6569 3 21 4.34315 21 6Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M21 18C21 19.6569 19.6569 21 18 21C16.3431 21 15 19.6569 15 18C15 16.3431 16.3431 15 18 15C19.6569 15 21 16.3431 21 18Z\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M15 8L3 19\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M15.0003 16L11 12\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M3 5.00011L8.5 10\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Folder01": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M13.6656 6.49446H16C18.8284 6.49446 20.2426 6.49446 21.1213 7.37314C22 8.25182 22 9.66603 22 12.4945V14.5C22 17.3284 22 18.7426 21.1213 19.6213C20.2426 20.5 18.8284 20.5 16 20.5H8C5.17157 20.5 3.75736 20.5 2.87868 19.6213C2 18.7426 2 17.3284 2 14.5V8.99183C2 6.65409 2 5.48521 2.61604 4.67881C2.7778 4.46706 2.96706 4.2778 3.17881 4.11604C3.98521 3.5 5.15409 3.5 7.49183 3.5C8.16633 3.5 8.50358 3.5 8.81392 3.60442C8.8976 3.63257 8.97932 3.66623 9.05854 3.70518C9.35239 3.84965 9.59179 4.08719 10.0706 4.56227L10.8483 5.33389C11.4254 5.9066 11.714 6.19295 12.08 6.3437C12.446 6.49446 12.8525 6.49446 13.6656 6.49446Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Mic01": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M7 6.5C7 4.01472 9.01472 2 11.5 2C13.9853 2 16 4.01472 16 6.5V11.5C16 13.9853 13.9853 16 11.5 16C9.01472 16 7 13.9853 7 11.5V6.5Z\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M11.5 19H11.0828C7.57267 19 4.57706 16.4623 4 13M11.5 19H11.9172C15.4273 19 18.4229 16.4623 19 13M11.5 19V22\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "Cancel01": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M18.9991 19L5 5.00098\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M19 5L5.00092 18.999\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>", "ColorPicker": "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M13.435 7L7.15915 13.2759M7.15915 13.2759L4.82728 15.6077C3.92569 16.5093 3.47489 16.9601 3.23745 17.5334C3 18.1066 3 18.7441 3 20.0192V21H3.98082C5.25586 21 5.89338 21 6.46663 20.7626C7.03988 20.5251 7.49068 20.0743 8.39227 19.1727L14.2891 13.2759M7.15915 13.2759H14.2891M14.2891 13.2759L17 10.565\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/><path d=\"M19.2087 8.38869L20.82 10M19.2087 8.38869L20.0705 7.52682C20.363 7.23431 20.5093 7.08805 20.611 6.94529C21.1297 6.21676 21.1297 5.23953 20.611 4.511C20.5093 4.36824 20.363 4.22198 20.0705 3.92947C19.778 3.63697 19.6318 3.4907 19.489 3.38905C18.7605 2.87032 17.7832 2.87032 17.0547 3.38905C16.912 3.4907 16.7657 3.63695 16.4732 3.92947L15.6113 4.79133M19.2087 8.38869L15.6113 4.79133M14 3.18002L15.6113 4.79133\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg>"};  // Hugeicons (core-free-icons 4.4.0)
+const $ = id => document.getElementById(id);
+document.querySelectorAll("[data-icon]").forEach(el => el.insertAdjacentHTML("afterbegin", HI[el.dataset.icon] || ""));
+const COLORS = [["#0f1014","검정"],["#1b2a4a","남색"],["#1f6bff","파랑"],["#3a3d45","진회색"],["#ffffff","흰색"],["#ffe14d","노랑"]];
+COLORS.forEach(([c, name]) => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "sw"; b.style.background = c;
+  b.dataset.color = c; b.title = name; b.setAttribute("aria-label", "배경 " + name);
+  b.addEventListener("click", () => setOverlay({ overlay_bg: c }));
+  $("swatches").insertBefore(b, $("swatches").lastElementChild);
+});
+function inkFor(hex) {  // 배경이 밝으면 검은 글자
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#111318" : "#ffffff";
+}
+let ov = null, alphaEditing = false, alphaTimer = null;
+function renderOverlay(st) {
+  ov = st;
+  $("ovOn").innerHTML = HI[st.overlay_on ? "View" : "ViewOff"]; $("ovOn").setAttribute("aria-pressed", st.overlay_on);
+  $("ovEn").innerHTML = HI[st.overlay_en ? "View" : "ViewOff"]; $("ovEn").setAttribute("aria-pressed", st.overlay_en);
+  $("szOut").textContent = st.overlay_size;
+  if (!alphaEditing) { $("alpha").value = st.overlay_alpha; $("alphaOut").textContent = st.overlay_alpha + "%"; }
+  document.querySelectorAll(".sw").forEach(b => b.setAttribute("aria-pressed", b.dataset.color === st.overlay_bg));
+  if (document.activeElement !== $("bgCustom")) $("bgCustom").value = st.overlay_bg;
+  const pv = $("pv"); pv.style.color = inkFor(st.overlay_bg);
+  paintPreview(st.overlay_bg, alphaEditing ? +$("alpha").value : st.overlay_alpha);
+  if (!radiusEditing) { $("radius").value = st.overlay_radius; $("radiusOut").textContent = st.overlay_radius + "px"; }
+  pv.style.borderRadius = Math.round((radiusEditing ? +$("radius").value : st.overlay_radius) * 0.6) + "px";
+  pv.style.textShadow = inkFor(st.overlay_bg) === "#ffffff" ? "0 0 2px #000, 0 0 2px #000" : "0 0 2px #fff, 0 0 2px #fff";
+  $("pvKo").style.fontSize = Math.round(st.overlay_size * 0.75) + "px";
+  $("pvEn").hidden = !st.overlay_en;
+}
+function paintPreview(hex, alpha) {  // 배경만 투명하게: 색 + 알파
+  $("pv").style.background = hex + Math.round(alpha / 100 * 255).toString(16).padStart(2, "0");
+}
+let radiusEditing = false, radiusTimer = null;
+$("radius").addEventListener("input", () => {
+  radiusEditing = true; $("radiusOut").textContent = $("radius").value + "px";
+  $("pv").style.borderRadius = Math.round($("radius").value * 0.6) + "px";
+  clearTimeout(radiusTimer);
+  radiusTimer = setTimeout(async () => { await setOverlay({ overlay_radius: +$("radius").value }); radiusEditing = false; }, 150);
+});
+async function setOverlay(patch) { render(await api("/api/settings", patch)); }
+$("ovOn").addEventListener("click", () => setOverlay({ overlay_on: !ov.overlay_on }));
+$("ovEn").addEventListener("click", () => setOverlay({ overlay_en: !ov.overlay_en }));
+$("szDown").addEventListener("click", () => setOverlay({ overlay_size: Math.max(14, ov.overlay_size - 2) }));
+$("szUp").addEventListener("click", () => setOverlay({ overlay_size: Math.min(44, ov.overlay_size + 2) }));
+$("bgCustom").addEventListener("input", e => setOverlay({ overlay_bg: e.target.value }));
+$("alpha").addEventListener("input", () => {
+  alphaEditing = true; $("alphaOut").textContent = $("alpha").value + "%";
+  paintPreview(ov.overlay_bg, +$("alpha").value);
+  clearTimeout(alphaTimer);
+  alphaTimer = setTimeout(async () => { await setOverlay({ overlay_alpha: +$("alpha").value }); alphaEditing = false; }, 150);
+});
+let state = null, editing = false, timer = null;
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  return r.json();
+}
+
+function render(s) {
+  state = s;
+  const st = $("status");
+  st.className = "pill " + (s.running ? (s.status.startsWith("듣는 중") ? "on" : "warn") : "");
+  st.querySelector("span").textContent = s.running ? s.status : "대기 중";
+  $("go").innerHTML = HI[s.running ? "Stop" : "Play"] + (s.running ? "멈추기" : "읽기 시작");
+  renderOverlay(s.settings);
+  $("go").className = "go" + (s.running ? " stop" : "");
+  if (s.speaking) {
+    $("nowKo").textContent = s.speaking;
+    $("spk").innerHTML = '<span class="speaking-dot" title="말하는 중"></span>';
+  } else {
+    $("spk").textContent = "";
+    if (s.running && s.current.ko) $("nowKo").textContent = s.current.ko;
+  }
+  $("nowEn").textContent = s.running ? (s.current.en || "") : "";
+  $("sSpoken").textContent = s.stats.spoken;
+  $("sDelay").textContent = s.stats.avg_delay;
+  $("sDups").textContent = s.stats.dups;
+  $("sFrags").textContent = s.stats.frags;
+  if (!editing) {
+    $("rate").value = s.settings.base_rate; $("rateOut").textContent = s.settings.base_rate;
+    $("volume").value = s.settings.volume; $("volOut").textContent = s.settings.volume;
+    $("auto").checked = s.settings.auto_speed; $("frag").checked = s.settings.filter_fragments;
+    const sel = $("voice");
+    if (sel.options.length !== s.voices.length) {
+      sel.innerHTML = "";
+      s.voices.forEach(v => { const o = document.createElement("option"); o.value = v.id; o.textContent = v.label; sel.appendChild(o); });
+    }
+    if (s.voices.some(v => v.id === s.settings.voice)) sel.value = s.settings.voice;
+    $("source").value = s.settings.source;
+    $("source").disabled = s.running;  // 읽는 중엔 못 바꿈 (멈추고 바꾸기)
+  }
+  const ul = $("recent");
+  if (!s.recent.length) { ul.innerHTML = '<li class="hint">아직 없어</li>'; return; }
+  ul.innerHTML = "";
+  s.recent.forEach(r => {
+    const li = document.createElement("li");
+    const ko = document.createElement("div"); ko.className = "ko"; ko.textContent = r.ko;
+    const meta = document.createElement("div"); meta.className = "meta";
+    meta.textContent = `${r.time} · 지연 ${r.delay}초 · 빠르기 ${r.rate}`;
+    li.append(ko, meta); ul.appendChild(li);
+  });
+}
+
+async function poll() {
+  try { render(await api("/api/state")); } catch (e) {
+    $("status").querySelector("span").textContent = "앱 연결 끊김";
+  }
+}
+setInterval(poll, 600); poll();
+
+// ---- 준비 점검 ----
+let setupOpen = false, setupTimer = null;
+const ACT = { install: ["Ollama 설치", "/api/setup/install"], start: ["Ollama 켜기", "/api/setup/start"], pull: ["모델 받기", "/api/setup/pull"] };
+function renderSetup(c) {
+  const box = $("checks"); box.innerHTML = "";
+  c.items.forEach(it => {
+    const row = document.createElement("div"); row.className = "check";
+    const mark = it.ok ? ["CheckmarkCircle02", "ok"] : it.warn ? ["Alert02", "wa"] : ["CancelCircle", "no"];
+    row.innerHTML = `<span class="${mark[1]}">${HI[mark[0]]}</span><div><div class="t"></div><div class="d"></div></div><span></span>`;
+    row.querySelector(".t").textContent = it.label; row.querySelector(".d").textContent = it.detail;
+    if (it.action && c.job.status !== "running") {
+      const b = document.createElement("button"); b.className = "btn primary"; b.type = "button";
+      b.innerHTML = HI[it.action === "pull" ? "Download04" : "Download04"] + ACT[it.action][0];
+      b.addEventListener("click", async () => renderSetup(await api(ACT[it.action][1], {})));
+      row.lastElementChild.appendChild(b);
+    }
+    box.appendChild(row);
+  });
+  const j = c.job, running = j.status === "running";
+  $("job").hidden = !(running || j.status === "error");
+  $("jobBar").style.width = (j.percent || 0) + "%";
+  $("jobText").textContent = running ? `${{install: "Ollama 설치 중", start: "Ollama 켜는 중", pull: "모델 받는 중"}[j.kind] || ""} · ${j.percent || 0}%`
+    : (j.status === "error" ? "안 됐어요: " + j.error : "");
+  $("setupHint").textContent = c.ready ? "준비 끝. 영상을 틀고 '읽기 시작'을 누르세요." : "빨간 줄을 위에서부터 채워 주세요.";
+  if (!c.ready || running) { $("setup").hidden = false; setupOpen = true; }
+  clearTimeout(setupTimer);
+  if (running || (setupOpen && !c.ready)) setupTimer = setTimeout(checkSetup, running ? 1000 : 4000);
+}
+async function checkSetup() { try { renderSetup(await api("/api/setup")); } catch (e) {} }
+$("setupBtn").addEventListener("click", () => { setupOpen = !setupOpen; $("setup").hidden = !setupOpen; if (setupOpen) checkSetup(); });
+$("setupRe").addEventListener("click", checkSetup);
+checkSetup();  // 처음 켤 때 한 번: 모자란 게 있으면 카드가 열린다
+
+function sendSettings() {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    render(await api("/api/settings", {
+      base_rate: +$("rate").value, volume: +$("volume").value,
+      auto_speed: $("auto").checked, filter_fragments: $("frag").checked, voice: $("voice").value || "sapi:Heami", source: $("source").value }));
+    editing = false;
+  }, 250);
+}
+["rate", "volume"].forEach(id => $(id).addEventListener("input", () => {
+  editing = true;
+  $(id === "rate" ? "rateOut" : "volOut").textContent = $(id).value;
+  sendSettings();
+}));
+["auto", "frag", "voice", "source"].forEach(id => $(id).addEventListener("change", () => { editing = true; sendSettings(); }));
+$("go").addEventListener("click", async () => render(await api(state && state.running ? "/api/stop" : "/api/start", {})));
+$("test").addEventListener("click", () => api("/api/test-voice", {}));
+$("logs").addEventListener("click", () => api("/api/open-logs", {}));
+</script>
+</body>
+</html>

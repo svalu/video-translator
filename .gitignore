@@ -1,0 +1,11 @@
+.venv/
+dist/
+build/
+logs/
+.tts/
+.webview/
+.app-window/
+__pycache__/
+settings.json
+.overlay.json
+*.spec
