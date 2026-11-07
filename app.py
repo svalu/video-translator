@@ -97,7 +97,7 @@ def state():
 
 
 TITLE = "동영상 번역기"
-ICON = os.path.join(RES, "ui", "brand", "mark_black.ico")  # 창 제목줄: 검은 마크만 (바로가기·exe 는 app.ico 타일)
+ICON = os.path.join(RES, "ui", "brand", "app.ico")  # 창 제목줄·작업 표시줄 = 앱 아이콘 (11/08: 메이커 마크는 '만든 사람' 자리로)
 APP_ID = "Heerang.VideoTranslator"
 
 

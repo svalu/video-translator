@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<rect width="1024" height="1024" rx="224" fill="#111318"/>
+<rect x="150" y="170" width="460" height="390" rx="110" fill="#fff"/><path d="M191 550H311L211 655z" fill="#fff"/>
+<rect x="380" y="380" width="528" height="458" rx="144" fill="#111318"/><path d="M679 794H867L833 947z" fill="#111318"/>
+<rect x="414" y="414" width="460" height="390" rx="110" fill="#1f6bff"/><path d="M713 794H833L813 899z" fill="#1f6bff"/>
+<text x="325" y="470" font-family="Segoe UI,Arial,sans-serif" font-weight="700" font-size="300" text-anchor="middle" fill="#111318">A</text>
+<text x="644" y="700" font-family="Malgun Gothic,Pretendard,sans-serif" font-weight="700" font-size="270" text-anchor="middle" fill="#fff">가</text>
+</svg>
