@@ -1,0 +1,2 @@
+# bat 은 어느 PC 에서 받아도 CRLF (LF 면 cmd 가 줄을 잘못 읽을 때가 있다)
+*.bat text eol=crlf
