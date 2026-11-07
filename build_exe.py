@@ -48,6 +48,16 @@ for _n in ("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "vcruntime140.dll
     if os.path.exists(os.path.join(_sys32, _n)):
         shutil.copy2(os.path.join(_sys32, _n), os.path.join(_internal, _n))
 
+# 어느 커밋으로 만든 exe 인지 적어 둔다 → 앱이 GitHub 최신과 비교해 '새 버전 있어'를 띄운다 (updater.py, 11/08)
+import subprocess as _sp
+try:
+    _head = _sp.run(["git", "-C", HERE, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    _dirty = bool(_sp.run(["git", "-C", HERE, "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True).stdout.strip())
+    with open(os.path.join(HERE, "dist", "VideoTranslator", "build_commit.txt"), "w", encoding="utf-8") as _f:
+        _f.write(_head + (" dirty" if _dirty else "") + "\n")
+except Exception:
+    pass  # git 이 없으면 알림 없이
+
 # 버전별 zip: 지금 버전은 dist\VideoTranslator_v0.x.zip, 다른 버전은 dist\Archive\ 로 (같은 버전 다시 묶으면 덮어씀)
 from version import VERSION
 dist = os.path.join(HERE, "dist", "VideoTranslator")

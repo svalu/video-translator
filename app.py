@@ -18,12 +18,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from paths import RES
 from reader_core import HERE, Reader
 from setup_check import Setup
+from updater import Updater
 from version import VERSION
 
 PORT = 8765
 UI = os.path.join(RES, "ui", "index.html")
 reader = Reader()
 setup = Setup(lambda: reader.settings["local_model"])
+updater = Updater()  # 새 버전 알림 (GitHub main 과 비교)
 screen_req = [0]  # 앱 창의 '화면 번역' 버튼을 누른 횟수 — 화면 번역 프로세스가 보고 움직인다
 last_ping = [time.time()]
 
@@ -85,6 +87,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(setup.check())
         elif self.path == "/api/screen":
             screen_req[0] += 1
+        elif self.path == "/api/update":
+            reader.stop()
+            updater.run_update()  # 업데이트.bat 이 이 앱을 끄고 새 판으로 다시 켠다
         elif self.path == "/api/open-logs":
             os.startfile(os.path.join(HERE, "logs"))
         else:
@@ -93,7 +98,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def state():
-    return {**reader.state(), "screen_req": screen_req[0], "version": VERSION}
+    return {**reader.state(), "screen_req": screen_req[0], "version": VERSION, "update": dict(updater.info)}
 
 
 TITLE = "동영상 번역기"
@@ -209,6 +214,7 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print("동영상 번역기:", url)
     open_screen()
+    updater.start()
 
     if "--no-window" not in sys.argv and run_webview(url):
         pass  # WebView2 창이 닫혔다 → 끝
