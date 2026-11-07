@@ -12,5 +12,13 @@ winrt-Windows.Globalization==4!10.0.28000.2957
 winrt-Windows.Graphics.Imaging==4!10.0.28000.2957
 winrt-Windows.Media.Ocr==4!10.0.28000.2957
 winrt-Windows.Storage.Streams==4!10.0.28000.2957
+# Whisper 귀 (11/08, 윈10 처럼 실시간 자막이 없는 PC 용) — PC 소리 직접 받아쓰기
+faster-whisper==1.2.1
+ctranslate2==4.8.5
+onnxruntime==1.31.1
+PyAudioWPatch==0.2.12.9
+# Whisper 를 GPU 로 (약 2GB, CUDA 툴킷 없이). exe 엔 안 넣고 앱의 '준비 점검'이 따로 받는다
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.28.1.4
 # exe 로 묶을 때만
 pyinstaller==6.22.3

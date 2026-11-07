@@ -30,6 +30,7 @@ DEFAULTS = {
     "filter_fragments": True,
     "source": "local",       # local = 실시간 자막을 직접 읽고 내 PC 모델로 번역 / translator = LiveCaptions Translator 앱(구글)
     "local_model": "exaone3.5:7.8b",
+    "ear": "auto",           # 귀: auto = 실시간 자막이 있으면(윈11) 그것, 없으면(윈10) Whisper / captions / whisper (11/08)
     # 한국어 자막 줄 (subtitle_overlay.py 가 0.3초마다 읽어서 바로 반영)
     "overlay_on": True,
     "overlay_size": 22,          # 한국어 글자 크기 (pt)
@@ -40,6 +41,11 @@ DEFAULTS = {
 }
 LAG_OK = 6.0
 MAX_BACKLOG = 2
+
+
+def captions_available():
+    """윈도우 실시간 자막(윈11 22H2+)이 이 PC에 있나."""
+    return os.path.exists(os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "LiveCaptions.exe"))
 
 
 class SapiVoice:
@@ -178,9 +184,17 @@ class Reader:
             self._log_file = open(path, "w", newline="", encoding="utf-8-sig")
             self._log = csv.writer(self._log_file)
             self._log.writerow(["시각", "지연초", "건너뜀", "영어", "한국어", "빠르기", "확정까지", "줄대기", "합성대기", "말한초", "번역초", "번역"])
-            local = self.settings["source"] == "local"
-            self.status = "실시간 자막 찾는 중" if local else "번역기 찾는 중"
+            whisper = self.ear_mode() == "whisper"
+            local = self.settings["source"] == "local" or whisper  # 번역기 앱(구글)은 실시간 자막이 있어야 해서 Whisper 귀면 내 PC 번역
+            self.status = "귀(Whisper) 준비 중" if whisper else ("실시간 자막 찾는 중" if local else "번역기 찾는 중")
         threading.Thread(target=self._local_loop if local else self._watch_loop, daemon=True).start()
+
+    def ear_mode(self):
+        """지금 쓸 귀: 'captions'(윈도우 실시간 자막) 또는 'whisper'(PC 소리 직접 받아쓰기)."""
+        ear = self.settings.get("ear", "auto")
+        if ear == "auto":
+            return "captions" if captions_available() else "whisper"
+        return ear
 
     def stop(self):
         with self.lock:
@@ -241,6 +255,8 @@ class Reader:
                 "stats": {**{k: s[k] for k in ("spoken", "dups", "frags", "skipped")}, "avg_delay": round(avg, 1)},
                 "settings": dict(self.settings),
                 "voices": list(self.voice_names),
+                "ear": self.ear_mode(),
+                "captions_available": captions_available(),
             }
 
     # ---------- 안에서 도는 것 ----------
@@ -339,6 +355,8 @@ class Reader:
                 self._q.put((time.time(), en, ko, born, tr.last_sec))
 
         threading.Thread(target=translate_worker, daemon=True).start()
+        if self.ear_mode() == "whisper":
+            return self._whisper_listen(jobs)
         with auto.UIAutomationInitializerInThread():
             box = None
             while not self._stop.is_set() and box is None:
@@ -374,6 +392,48 @@ class Reader:
                     if box is not None:
                         self.status = "듣는 중 · 내 PC 번역"
                 time.sleep(0.3)
+
+    def _whisper_listen(self, jobs):
+        """귀 = Whisper: PC 소리를 직접 받아쓴다 (윈10 에서도). 끝난 영어 문장은 실시간 자막 때와 같은 번역 줄로."""
+        from whisper_ear import WhisperEar
+
+        def status(s):
+            if self.running:
+                self.status = s
+        ear = getattr(self, "_ear", None)
+        if ear is None:
+            ear = self._ear = WhisperEar(status=status)
+        ear.status = status
+        try:
+            if ear.model is None:
+                status("Whisper 올리는 중 (처음엔 몇 초)")
+            ear.load()  # 한 번 올리면 앱이 켜져 있는 동안 그대로 (다음 '읽기 시작'은 바로)
+        except Exception as e:
+            self.status = f"Whisper 를 못 불렀어: {type(e).__name__} — 준비 점검을 열어 봐"
+            self.running = False
+            return
+
+        def on_sentence(en, born):
+            jobs.put((time.time(), en, born))
+
+        def on_text(t):
+            if not self.now_speaking:
+                self.current = {"en": t, "ko": self.current.get("ko", "")}
+
+        t_start = time.time()
+        try:
+            ear.listen(self._stop, on_sentence, on_text)
+        finally:
+            # 귀가 무엇을 어떻게 받아썼는지 남긴다 (문장이 사라지면 여기서 원인을 본다)
+            try:
+                path = os.path.join(HERE, "logs", f"귀_{datetime.now():%Y%m%d_%H%M}.txt")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(f"# Whisper 귀 · {ear.model_name} · {ear.device} · 한국어(되먹임) 단어 버림 {ear.dropped_ko}\n")
+                    for tt, kind, text in list(ear.trace):
+                        if tt >= t_start:
+                            f.write(f"{datetime.fromtimestamp(tt):%H:%M:%S}.{int(tt * 10) % 10} {kind}: {text}\n")
+            except OSError:
+                pass
 
     def _voice_loop(self):
         import comtypes

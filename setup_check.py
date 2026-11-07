@@ -4,6 +4,7 @@
   Ollama       번역 모델을 돌리는 프로그램. 없으면 winget 으로 설치 (사용자가 버튼을 눌렀을 때만).
   번역 모델     ollama 에 받아 둔 모델. 없으면 받기 (진행률 표시).
   그래픽카드    nvidia-smi 로 VRAM. 6GB 미만이면 느리다고 미리 알려 준다.
+  Whisper 귀    실시간 자막이 없는 윈10 용 (11/08). GPU 부품(cuBLAS·cuDNN)이 없으면 버튼으로 받는다.
 """
 import json
 import os
@@ -70,10 +71,23 @@ class Setup:
         present = any(h == model or h == model + ":latest" for h in have)
         if self._gpu is None:
             self._gpu = gpu_info()
+        # 귀: 실시간 자막이 없으면(윈10) Whisper 가 대신 듣는다 (11/08). GPU 부품이 없으면 CPU 로라도 돈다.
+        import whisper_ear
+        nvidia = self._gpu["vram_gb"] > 0
+        cuda = whisper_ear.cuda_ready()
+        wmodel = whisper_ear.model_cached(whisper_ear.GPU_MODEL if cuda else whisper_ear.CPU_MODEL)
+        if cuda:
+            wdetail = "GPU 로 받아써요 · " + ("모델 받아 뒀어요" if wmodel else "처음 '읽기 시작' 때 모델을 받아요 (약 1.6GB)")
+        elif nvidia:
+            wdetail = "GPU 부품이 없어서 지금은 CPU 로 (느려요). 받으면 빨라져요 (약 1.2GB)"
+        else:
+            wdetail = "그래픽카드가 없어서 CPU 로 받아써요 (느려요)"
         items = [
-            {"key": "captions", "label": "윈도우 실시간 자막", "ok": captions,
+            {"key": "captions", "label": "귀 · 윈도우 실시간 자막", "ok": captions, "warn": not captions,
              "detail": "있어요 (처음 켤 때 '영어(미국)' 음성 팩을 받으라고 하면 받아 주세요)" if captions
-             else "윈도우 11 22H2 이상에만 있어요"},
+             else "이 PC엔 없어요 (윈도우 11 22H2+ 전용) → 아래 Whisper 가 대신 들어요"},
+            {"key": "whisper", "label": "귀 · Whisper (PC 소리 직접 받아쓰기)", "ok": cuda, "warn": not cuda,
+             "detail": wdetail, "action": "cuda" if (nvidia and not cuda) else None},
             {"key": "ollama", "label": "Ollama (번역 엔진)", "ok": running,
              "detail": f"실행 중 · {version}" if running else ("설치돼 있는데 꺼져 있어요" if exe else "설치가 필요해요"),
              "action": None if running else ("start" if exe else "install")},
@@ -84,8 +98,19 @@ class Setup:
              "warn": self._gpu["tier"] == "slow",
              "detail": (f"{self._gpu['vram_gb']}GB · " if self._gpu["vram_gb"] else "") + self._gpu["note"]},
         ]
-        ready = captions and running and present
+        ready = running and present  # 귀는 실시간 자막이든 Whisper(CPU 라도)든 하나는 늘 있다
         return {"ready": ready, "items": items, "job": dict(self.job)}
+
+    def get_cuda(self):
+        """Whisper 를 GPU 로 돌릴 부품(cuBLAS·cuDNN)을 받는다. exe 에는 안 넣는다 (약 2GB)."""
+        def fn():
+            import whisper_ear
+
+            def prog(pct, text):
+                self.job["percent"] = pct
+                self.job["detail"] = text
+            whisper_ear.download_cuda(prog)
+        self._run("cuda", fn)
 
     # ---------- 채우기 (버튼) ----------
     def _run(self, kind, fn):

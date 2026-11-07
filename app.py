@@ -80,6 +80,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/setup/pull":
             setup.pull_model()
             return self._json(setup.check())
+        elif self.path == "/api/setup/cuda":
+            setup.get_cuda()
+            return self._json(setup.check())
         elif self.path == "/api/screen":
             screen_req[0] += 1
         elif self.path == "/api/open-logs":

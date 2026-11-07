@@ -29,8 +29,24 @@ PyInstaller.__main__.run([
     "--collect-data", "certifi",        # Edge 목소리 https
     "--hidden-import", "comtypes.stream",
     "--hidden-import", "subtitle_overlay",
+    # Whisper 귀 (11/08). GPU 부품(nvidia-* 약 2GB)은 넣지 않는다 — 준비 점검이 %LOCALAPPDATA% 로 받는다
+    "--hidden-import", "whisper_ear",
+    "--collect-all", "faster_whisper",  # VAD 모델(onnx) 등 자료 포함
+    "--collect-all", "ctranslate2",
+    "--collect-all", "pyaudiowpatch",   # PC 소리 받기 (루프백)
+    "--collect-binaries", "onnxruntime",
+    "--exclude-module", "nvidia",
     "--exclude-module", "pyttsx3",      # 예전 방식에서만 썼다
 ])
+
+# C++ 런타임 바꿔 넣기 (11/08): PyInstaller 가 어느 패키지에서 오래된 MSVCP140.dll(14.36)을 주워 넣는데,
+# Whisper 엔진(ctranslate2)은 새 컴파일러(14.40+)로 만들어져서 std::mutex 쓰는 순간 0xc0000005 로 exe 가 통째로 죽는다.
+# → 이 PC 윈도우에 깔린 최신 런타임(System32)으로 덮어쓴다.
+_internal = os.path.join(HERE, "dist", "VideoTranslator", "_internal")
+_sys32 = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+for _n in ("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll"):
+    if os.path.exists(os.path.join(_sys32, _n)):
+        shutil.copy2(os.path.join(_sys32, _n), os.path.join(_internal, _n))
 
 # 버전별 zip: 지금 버전은 dist\VideoTranslator_v0.x.zip, 다른 버전은 dist\Archive\ 로 (같은 버전 다시 묶으면 덮어씀)
 from version import VERSION

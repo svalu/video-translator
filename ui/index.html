@@ -143,6 +143,15 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
       <span></span>
     </div>
     <div class="field">
+      <label for="ear" class="ic" data-icon="Mic01">귀</label>
+      <select id="ear">
+        <option value="auto">자동</option>
+        <option value="whisper">Whisper · PC 소리 직접 받아쓰기</option>
+        <option value="captions">윈도우 실시간 자막 (윈11)</option>
+      </select>
+      <span></span>
+    </div>
+    <div class="field">
       <label for="voice" class="ic" data-icon="TextToSpeach">목소리</label>
       <select id="voice"></select>
       <span></span>
@@ -289,6 +298,15 @@ function render(s) {
     if (s.voices.some(v => v.id === s.settings.voice)) sel.value = s.settings.voice;
     $("source").value = s.settings.source;
     $("source").disabled = s.running;  // 읽는 중엔 못 바꿈 (멈추고 바꾸기)
+    // 귀: 자동이면 지금 무엇을 쓰는지 보여 주고, 실시간 자막이 없는 PC(윈10)에선 그 선택지를 막는다
+    const ear = $("ear");
+    ear.options[0].textContent = "자동 · 지금 " + (s.ear === "whisper" ? "Whisper" : "실시간 자막");
+    ear.options[2].disabled = !s.captions_available;
+    ear.options[2].textContent = "윈도우 실시간 자막" + (s.captions_available ? "" : " · 이 PC엔 없음 (윈11 전용)");
+    ear.value = s.settings.ear || "auto";
+    ear.disabled = s.running;
+    // Whisper 귀는 실시간 자막을 안 쓰니 '번역기 앱(구글)'은 못 쓴다 → 내 PC 번역으로 돈다
+    $("source").options[1].disabled = s.ear === "whisper";
   }
   const ul = $("recent");
   if (!s.recent.length) { ul.innerHTML = '<li class="hint">아직 없어</li>'; return; }
@@ -311,7 +329,8 @@ setInterval(poll, 600); poll();
 
 // ---- 준비 점검 ----
 let setupOpen = false, setupTimer = null;
-const ACT = { install: ["Ollama 설치", "/api/setup/install"], start: ["Ollama 켜기", "/api/setup/start"], pull: ["모델 받기", "/api/setup/pull"] };
+const ACT = { install: ["Ollama 설치", "/api/setup/install"], start: ["Ollama 켜기", "/api/setup/start"], pull: ["모델 받기", "/api/setup/pull"],
+              cuda: ["GPU 부품 받기", "/api/setup/cuda"] };
 function renderSetup(c) {
   const box = $("checks"); box.innerHTML = "";
   c.items.forEach(it => {
@@ -330,7 +349,7 @@ function renderSetup(c) {
   const j = c.job, running = j.status === "running";
   $("job").hidden = !(running || j.status === "error");
   $("jobBar").style.width = (j.percent || 0) + "%";
-  $("jobText").textContent = running ? `${{install: "Ollama 설치 중", start: "Ollama 켜는 중", pull: "모델 받는 중"}[j.kind] || ""} · ${j.percent || 0}%`
+  $("jobText").textContent = running ? `${{install: "Ollama 설치 중", start: "Ollama 켜는 중", pull: "모델 받는 중", cuda: "GPU 부품 받는 중"}[j.kind] || ""} · ${j.percent || 0}%`
     : (j.status === "error" ? "안 됐어요: " + j.error : "");
   $("setupHint").textContent = c.ready ? "준비 끝. 영상을 틀고 '읽기 시작'을 누르세요." : "빨간 줄을 위에서부터 채워 주세요.";
   if (!c.ready || running) { $("setup").hidden = false; setupOpen = true; }
@@ -347,7 +366,7 @@ function sendSettings() {
   timer = setTimeout(async () => {
     render(await api("/api/settings", {
       base_rate: +$("rate").value, volume: +$("volume").value,
-      auto_speed: $("auto").checked, filter_fragments: $("frag").checked, voice: $("voice").value || "sapi:Heami", source: $("source").value }));
+      auto_speed: $("auto").checked, filter_fragments: $("frag").checked, voice: $("voice").value || "sapi:Heami", source: $("source").value, ear: $("ear").value }));
     editing = false;
   }, 250);
 }
@@ -356,7 +375,7 @@ function sendSettings() {
   $(id === "rate" ? "rateOut" : "volOut").textContent = $(id).value;
   sendSettings();
 }));
-["auto", "frag", "voice", "source"].forEach(id => $(id).addEventListener("change", () => { editing = true; sendSettings(); }));
+["auto", "frag", "voice", "source", "ear"].forEach(id => $(id).addEventListener("change", () => { editing = true; sendSettings(); }));
 $("go").addEventListener("click", async () => render(await api(state && state.running ? "/api/stop" : "/api/start", {})));
 $("test").addEventListener("click", () => api("/api/test-voice", {}));
 $("screenBtn").addEventListener("click", () => api("/api/screen", {}));  // 바로 전에 보던 창을 번역
