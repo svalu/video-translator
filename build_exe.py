@@ -44,4 +44,8 @@ zip_base = os.path.join(HERE, "dist", f"VideoTranslator_v{VERSION}")
 if os.path.exists(zip_base + ".zip"):
     os.remove(zip_base + ".zip")
 shutil.make_archive(zip_base, "zip", os.path.dirname(dist), "VideoTranslator")
-print("만듦:", dist, "/", zip_base + ".zip")
+
+# build\ 는 PyInstaller 중간 작업장. 거기에도 같은 이름·크기의 VideoTranslator.exe 가 남는데 _internal 이 없어서
+# 누르면 "Failed to load Python DLL" 이 뜬다(11/08 실제로 헷갈림). 완성본은 dist\ 에만 남긴다.
+shutil.rmtree(os.path.join(HERE, "build"), ignore_errors=True)
+print("만듦:", dist, "/", zip_base + ".zip", "(중간 build\\ 폴더는 지움)")
