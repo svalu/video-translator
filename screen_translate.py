@@ -62,10 +62,11 @@ _JUNK = re.compile(r"https?://|www\.|\.com/|docs\.goog|^[^A-Za-z]*$")
 
 
 def clean_ocr(t):
-    """한국어 OCR 엔진이 영어를 읽으며 흔히 틀리는 것 바로잡기."""
+    """OCR 이 영어를 읽으며 흔히 틀리는 것 바로잡기 (한국어 엔진·영어 엔진 둘 다)."""
     t = t.strip()
     t = re.sub(r"^(?:7|v|V|J|/)\s+(?=[A-Z0-9])", "✓ ", t)          # 체크표시 ✓ 를 7 로 읽음
-    t = re.sub(r"(?<=[A-Za-z0-9/ ])시(?=\s|&|$)", "AI", t)            # AI 를 '시'로 읽음
+    t = re.sub(r"(?<=[A-Za-z0-9/ ])시(?=\s|&|$)", "AI", t)            # AI 를 '시'로 읽음 (한국어 엔진)
+    t = re.sub(r"\bA[1l]\b", "AI", t)                                  # AI 를 A1·Al 로 읽음 (영어 엔진, 11/08)
     t = re.sub(r"\b2417\b", "24/7", t)
     t = re.sub(r"\b(\d{2,3})0?7\.", r"\1%", t)  # 1007. → 100%  (% 를 7 로 읽음)
     t = t.replace("『", "r").replace("』", "l")
@@ -118,24 +119,40 @@ def group_blocks(lines, top_skip=0):
 _cache = {}
 
 
+def _ask(chunk, model):
+    """번호 붙여 한 번에 보내고 {번호: 번역} 으로 받는다. 같은 번호가 또 나오면(모델이 되풀이) 처음 것만."""
+    user = "\n".join(f"{n}. {t}" for n, t in enumerate(chunk, 1))
+    body = json.dumps({"model": model, "stream": False, "keep_alive": "30m",
+                       "options": {"temperature": 0.1, "num_predict": 60 * len(chunk) + 100},
+                       "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]}).encode()
+    req = urllib.request.Request(OLLAMA, body, {"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        out = json.load(r)["message"]["content"]
+    got = {}
+    for line in out.splitlines():
+        m = re.match(r"\s*(\d+)[.)]\s*(.+)", line)
+        if m and 1 <= int(m.group(1)) <= len(chunk):
+            got.setdefault(int(m.group(1)), m.group(2).strip())
+    if len(chunk) == 1 and 1 not in got:  # 하나만 보냈는데 번호 없이 답함 → 첫 줄을 번역으로
+        first = next((l.strip() for l in out.splitlines() if l.strip()), "")
+        if first:
+            got[1] = first
+    return got
+
+
 def translate_blocks(texts, model):
+    """11/08: EXAONE 이 여러 블록을 받으면 2번을 1번 아래 들여쓰기로 붙이고 번호를 빼먹어서 빈칸이 됐다.
+    → 짝이 안 맞은 블록만 하나씩 다시 묻는다. 빈 번역은 캐시에 안 넣는다(다음에 누르면 다시 시도)."""
     todo = [t for t in dict.fromkeys(texts) if t not in _cache]
     for i in range(0, len(todo), 14):  # 너무 길면 나눠서
         chunk = todo[i:i + 14]
-        user = "\n".join(f"{n}. {t}" for n, t in enumerate(chunk, 1))
-        body = json.dumps({"model": model, "stream": False, "keep_alive": "30m",
-                           "options": {"temperature": 0.1, "num_predict": 60 * len(chunk) + 100},
-                           "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]}).encode()
-        req = urllib.request.Request(OLLAMA, body, {"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=180) as r:
-            out = json.load(r)["message"]["content"]
-        got = {}
-        for line in out.splitlines():
-            m = re.match(r"\s*(\d+)[.)]\s*(.+)", line)
-            if m:
-                got[int(m.group(1))] = m.group(2).strip()
+        got = _ask(chunk, model)
         for n, t in enumerate(chunk, 1):
-            _cache[t] = got.get(n, "")
+            ko = got.get(n, "")
+            if not ko and len(chunk) > 1:
+                ko = _ask([t], model).get(1, "")
+            if ko:
+                _cache[t] = ko
     return [_cache.get(t, "") for t in texts]
 
 
