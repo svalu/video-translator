@@ -15,6 +15,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body { background: var(--bg); color: var(--ink); font: 500 14px/1.5 var(--font); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+body > * { flex-shrink: 0; }  /* 내용이 창보다 길면 버튼·카드가 납작해지던 것 (11/08) → 줄이지 말고 스크롤 */
 .card { background: var(--panel); border-radius: 20px; padding: 16px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .between { justify-content: space-between; }
@@ -24,8 +25,39 @@ h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-2); flex: none; }
 .pill.on i { background: var(--ok); } .pill.warn i { background: var(--warn); }
 .pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.go { width: 100%; height: 52px; border: 0; border-radius: 16px; font: 700 16px var(--font); cursor: pointer; background: var(--blue); color: #fff; }
-.go.stop { background: var(--night); }
+/* 머리 줄: 마크·이름·버전·설정만. 이름은 절대 접히지 않는다 (11/08: 긴 상태 문구에 밀려 세로로 접혔음) */
+.head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.head h1 { white-space: nowrap; min-width: 0; }
+/* 읽기 카드: 상태 줄 + 큰 버튼. 상태는 '읽기'의 상태라 버튼 바로 위에 둔다 */
+.control { display: flex; flex-direction: column; gap: 12px; }
+.state { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 20px; font-size: 13px; }
+.state .dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: #b6bac4; flex: none; }
+.state.on .dot { background: var(--ok); }
+.state.on .dot::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--ok); opacity: 0; animation: ring 1.8s ease-out infinite; }
+@keyframes ring { 0% { transform: scale(.5); opacity: .55; } 100% { transform: scale(1.4); opacity: 0; } }
+.state.warn .dot { background: var(--warn); }
+.state b { flex: none; font-weight: 700; }
+.state span { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.state.warn { align-items: flex-start; }
+.state.warn .dot { margin-top: 6px; }
+.state.warn span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }  /* 문제 안내는 자르지 않고 두 줄까지 */
+.go { width: 100%; height: 52px; border: 0; border-radius: 16px; font: 700 16px var(--font); cursor: pointer; background: var(--blue); color: #fff;
+      transition: background-color .15s, color .15s, transform .1s; }
+.go:hover { background: #185be0; }
+.go:active { transform: scale(.985); }
+.go.stop { background: var(--panel-2); color: var(--ink); }           /* 읽는 중: 살아 있다는 신호는 초록 점이 맡고 버튼은 차분하게 */
+.go.stop:hover { background: #e6e8ed; }
+/* 화면 번역: 읽기와 따로 노는 보조 기능 → 흰 바탕, 단축키는 키캡으로 */
+.screen-btn { width: 100%; height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 14px; border-radius: 14px;
+              border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: 600 14px var(--font); cursor: pointer;
+              transition: background-color .15s, transform .1s; }
+.screen-btn:hover { background: var(--panel-2); }
+.screen-btn:active { transform: scale(.985); }
+.screen-btn svg { width: 19px; height: 19px; flex: none; }
+.keys { margin-left: auto; display: inline-flex; gap: 3px; }
+kbd { font: 600 11px var(--font); color: var(--ink-2); background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 2px;
+      border-radius: 6px; padding: 1px 6px; line-height: 16px; }
+@media (prefers-reduced-motion: reduce) { .state.on .dot::after { animation: none; } .go, .screen-btn { transition: none; } .go:active, .screen-btn:active { transform: none; } }
 .now { background: var(--night); color: #fff; border-radius: 20px; padding: 16px; min-height: 120px; display: flex; flex-direction: column; gap: 8px; }
 .now .label { color: #a6abb8; }
 .now .ko { font-size: 19px; font-weight: 700; line-height: 1.45; }
@@ -90,13 +122,10 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
 </style>
 </head>
 <body>
-  <div class="row between">
+  <header class="head">
     <h1 class="ic brand" title="희랑이 만든 것"><svg viewBox="0 0 550 550" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M496.29,294.9l-163.29-163.29h146.06v-44H70.94v44h146.06L53.71,294.9l31.11,31.11,34.57-34.57c-1.83,9.61-2.8,19.52-2.8,29.66,0,87.34,71.06,158.4,158.4,158.4s158.4-71.06,158.4-158.4c0-10.13-.97-20.04-2.8-29.65l34.57,34.57,31.11-31.11ZM297,208.82c45.47,8.89,81.38,44.8,90.27,90.27h-90.27v-90.27ZM253,299.09h-90.27c8.89-45.47,44.8-81.38,90.27-90.27v90.27ZM162.73,343.09h90.27v90.27c-45.47-8.89-81.38-44.8-90.27-90.27ZM297,433.37v-90.27h90.27c-8.89,45.47-44.8,81.38-90.27,90.27ZM275,162.69c-10.13,0-20.04.97-29.65,2.8l29.65-29.65,29.65,29.65c-9.61-1.83-19.52-2.8-29.65-2.8Z"/></svg><span>동영상 번역기</span><span id="ver" style="font-size:11px;font-weight:600;color:var(--ink-2);margin-left:2px"></span></h1>
-    <div class="head-btns">
-      <span class="pill" id="status"><i></i><span>대기 중</span></span>
-      <button class="icon-btn" id="setupBtn" type="button" title="준비 점검" aria-label="준비 점검" data-icon="Settings02"></button>
-    </div>
-  </div>
+    <button class="icon-btn" id="setupBtn" type="button" title="준비 점검" aria-label="준비 점검" data-icon="Settings02"></button>
+  </header>
 
   <section class="card setup" id="setup" hidden aria-labelledby="setupTitle">
     <div class="row between"><span class="ic" id="setupTitle" style="font-weight:700">준비 점검</span>
@@ -106,9 +135,13 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
     <div class="hint" id="setupHint"></div>
   </section>
 
-  <button class="go" id="go" type="button">읽기 시작</button>
+  <section class="card control" aria-label="영상 소리 번역">
+    <div class="state" id="status" role="status"><i class="dot"></i><b id="stMain">대기 중</b><span id="stDetail"></span></div>
+    <button class="go" id="go" type="button">읽기 시작</button>
+  </section>
 
-  <button class="btn primary" id="screenBtn" type="button" style="height:42px;justify-content:center;border-radius:14px" data-icon="LanguageSkill">화면 번역 <span style="opacity:.6;font-weight:500">Ctrl+Shift+T</span></button>
+  <button class="screen-btn" id="screenBtn" type="button" data-icon="LanguageSkill" title="맨 앞 창의 영어를 한국어로 덮기">화면 번역
+    <span class="keys" aria-label="단축키 Ctrl Shift T"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd></span></button>
 
   <section class="now" aria-live="polite">
     <div class="row between"><span class="label">지금 읽는 문장</span><span id="spk"></span></div>
@@ -267,10 +300,18 @@ async function api(path, body) {
 
 function render(s) {
   state = s;
+  // 상태 줄: "듣는 중 · Whisper(GPU) · 헤드폰(…)" → 굵게 '듣는 중' + 회색 나머지 (길면 … , 문제 안내는 두 줄까지)
   const st = $("status");
-  st.className = "pill " + (s.running ? (s.status.startsWith("듣는 중") ? "on" : "warn") : "");
-  st.querySelector("span").textContent = s.running ? s.status : "대기 중";
-  $("go").innerHTML = HI[s.running ? "Stop" : "Play"] + (s.running ? "멈추기" : "읽기 시작");
+  const raw = s.running ? s.status : "대기 중";
+  const parts = raw.split(" · ");
+  let main = parts[0], detail = parts.slice(1).join(" · ").replace(" [Loopback]", "");
+  if (!s.running) detail = "귀 · " + (s.ear === "whisper" ? "Whisper (PC 소리 직접 받아쓰기)" : "윈도우 실시간 자막");
+  st.className = "state" + (s.running ? (main === "듣는 중" ? " on" : " warn") : "");
+  $("stMain").textContent = main; $("stDetail").textContent = detail; st.title = raw;
+  if ($("go").dataset.running !== String(s.running)) {  // 바뀔 때만 다시 그린다 (0.6초마다 깜빡이지 않게)
+    $("go").dataset.running = String(s.running);
+    $("go").innerHTML = HI[s.running ? "Stop" : "Play"] + `<span>${s.running ? "멈추기" : "읽기 시작"}</span>`;
+  }
   renderOverlay(s.settings);
   if (s.version) $("ver").textContent = "v" + s.version;
   $("go").className = "go" + (s.running ? " stop" : "");
@@ -322,7 +363,7 @@ function render(s) {
 
 async function poll() {
   try { render(await api("/api/state")); } catch (e) {
-    $("status").querySelector("span").textContent = "앱 연결 끊김";
+    $("status").className = "state warn"; $("stMain").textContent = "앱 연결 끊김"; $("stDetail").textContent = "동영상 번역기를 다시 켜 줘";
   }
 }
 setInterval(poll, 600); poll();
