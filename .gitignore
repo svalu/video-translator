@@ -9,3 +9,6 @@ __pycache__/
 settings.json
 .overlay.json
 *.spec
+# Whisper GPU 부품 (준비 점검이 받음, 약 2GB)
+cuda/
+.download/

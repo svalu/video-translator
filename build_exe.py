@@ -64,4 +64,21 @@ shutil.make_archive(zip_base, "zip", os.path.dirname(dist), "VideoTranslator")
 # build\ 는 PyInstaller 중간 작업장. 거기에도 같은 이름·크기의 VideoTranslator.exe 가 남는데 _internal 이 없어서
 # 누르면 "Failed to load Python DLL" 이 뜬다(11/08 실제로 헷갈림). 완성본은 dist\ 에만 남긴다.
 shutil.rmtree(os.path.join(HERE, "build"), ignore_errors=True)
-print("만듦:", dist, "/", zip_base + ".zip", "(중간 build\\ 폴더는 지움)")
+
+# 바탕화면·시작 메뉴 '동영상 번역기' 바로가기 → 완성본 exe (11/08: build\ 의 가짜 exe 를 눌러 헤맨 뒤로)
+# 한글 이름이라 PowerShell 에 UTF-16 으로 넘긴다 (bat/콘솔 코드페이지에 안 휘둘리게)
+import base64
+import subprocess
+_exe = os.path.join(dist, "VideoTranslator.exe")
+_ps = (
+    "$ws = New-Object -ComObject WScript.Shell; "
+    "foreach ($d in [Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs')) { "
+    "$l = $ws.CreateShortcut((Join-Path $d '동영상 번역기.lnk')); "
+    f"$l.TargetPath = '{_exe}'; $l.WorkingDirectory = '{dist}'; $l.IconLocation = '{_exe},0'; "
+    "$l.Description = '영어 영상·화면을 한국어로 (희랑)'; $l.Save() }"
+)
+subprocess.run(["powershell", "-NoProfile", "-EncodedCommand", base64.b64encode(_ps.encode("utf-16-le")).decode()],
+               check=False, capture_output=True)
+# 윈도우는 아이콘을 경로로 캐시해서 exe 아이콘을 바꿔도 바로가기가 한동안 예전 그림이다 → 캐시 새로 고침
+subprocess.run(["ie4uinit.exe", "-show"], check=False, capture_output=True)
+print("만듦:", dist, "/", zip_base + ".zip", "(중간 build\\ 폴더는 지움, 바로가기 갱신)")

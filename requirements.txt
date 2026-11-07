@@ -17,8 +17,7 @@ faster-whisper==1.2.1
 ctranslate2==4.8.5
 onnxruntime==1.31.1
 PyAudioWPatch==0.2.12.9
-# Whisper 를 GPU 로 (약 2GB, CUDA 툴킷 없이). exe 엔 안 넣고 앱의 '준비 점검'이 따로 받는다
-nvidia-cublas-cu12==12.9.2.10
-nvidia-cudnn-cu12==9.28.1.4
+# Whisper 를 GPU 로 돌릴 부품(약 2GB)은 여기 없다 — 앱 '준비 점검'의 'GPU 부품 받기'가 받는다
+# (코드로 돌릴 때도 같음. pip 로 넣고 싶으면 requirements-gpu.txt). 윈11 PC 는 실시간 자막을 써서 필요 없음
 # exe 로 묶을 때만
 pyinstaller==6.22.3

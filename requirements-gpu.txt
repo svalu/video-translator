@@ -1,0 +1,4 @@
+# (골라서) Whisper 를 GPU 로 돌릴 부품을 pip 로 .venv 에 넣을 때. 약 2GB, CUDA 툴킷 없이 된다.
+# 안 넣어도 앱의 '준비 점검' → 'GPU 부품 받기' 버튼이 같은 DLL 을 받아 준다 (그쪽이 기본).
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.28.1.4
