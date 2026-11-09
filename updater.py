@@ -81,15 +81,15 @@ class Updater:
                 mine = running_commit(self.repo)
                 behind = 0
                 if mine and mine != latest:
-                    try:
-                        behind = int(_git(self.repo, "rev-list", "--count", f"{mine}..{latest}"))
+                    try:  # 문서(.md)만 바뀐 커밋은 앱이 그대로라 세지 않는다 (11/10: 안내 문서 올렸더니 띠가 떴음)
+                        behind = int(_git(self.repo, "rev-list", "--count", f"{mine}..{latest}", "--", ".", ":(exclude)*.md"))
                     except Exception:
                         behind = 1  # 커밋을 못 찾음(예전 빌드) → 일단 새 버전으로 본다
                 elif not mine:
                     behind = 1      # 빌드 기록이 없는 예전 exe
                 ver = re.search(r'VERSION\s*=\s*"([^"]+)"', _git(self.repo, "show", "origin/main:version.py"))
                 self.info.update(available=behind > 0, behind=behind, latest_version=ver.group(1) if ver else "",
-                                 latest=_git(self.repo, "log", "-1", "--format=%s", "origin/main")[:80], error="")
+                                 latest=_git(self.repo, "log", "-1", "--format=%s", "origin/main", "--", ".", ":(exclude)*.md")[:80], error="")
             except Exception as e:   # 인터넷 없음·git 없음 → 조용히
                 self.info.update(available=False, error=f"{type(e).__name__}")
             finally:
