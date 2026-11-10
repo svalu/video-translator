@@ -49,8 +49,21 @@ _dst = os.path.join(HERE, "dist", "VideoTranslator")
 os.makedirs(_dst, exist_ok=True)
 for _n in os.listdir(_dst):
     _p = os.path.join(_dst, _n)
-    shutil.rmtree(_p) if os.path.isdir(_p) else os.remove(_p)
-shutil.copytree(os.path.join(_OUT, "VideoTranslator"), _dst, dirs_exist_ok=True)
+    shutil.rmtree(_p, ignore_errors=True) if os.path.isdir(_p) else os.remove(_p)
+
+
+# 11/11: 회사 보안 프로그램(Apex One)이 exe 를 오탐해서 격리할 때 dist 안의 파일 하나(WebView2Loader.dll)를 잠가
+# 지우지도 덮어쓰지도 못했다. 새로 만든 것과 크기가 같은(= 같은 판) 잠긴 파일은 그대로 두고 넘어간다.
+def _copy(src, dst):
+    try:
+        shutil.copy2(src, dst)
+    except PermissionError:
+        if not (os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src)):
+            raise
+        print("잠겨 있어서 두고 감 (같은 파일):", dst)
+
+
+shutil.copytree(os.path.join(_OUT, "VideoTranslator"), _dst, dirs_exist_ok=True, copy_function=_copy)
 
 # C++ 런타임 바꿔 넣기 (11/08): PyInstaller 가 어느 패키지에서 오래된 MSVCP140.dll(14.36)을 주워 넣는데,
 # Whisper 엔진(ctranslate2)은 새 컴파일러(14.40+)로 만들어져서 std::mutex 쓰는 순간 0xc0000005 로 exe 가 통째로 죽는다.
