@@ -76,8 +76,33 @@ def find_caption_box(launch=False):
             return None
         if not win.Exists(15, 0.5):  # 새로 켜면 창이 뜨기까지 6초 넘게 걸리기도 한다 (11/10)
             return None
-    box = win.Control(AutomationId="CaptionsTextBlock")
-    return box if box.Exists(3, 0.5) else None
+    return CaptionBox(win)
+
+
+class CaptionBox:
+    """실시간 자막 글자 칸. .Name 으로 지금 글자를 읽는다.
+    11/10: 막 켠 실시간 자막은 말소리가 들리기 전까지 '…표시 준비 완료'(ReadyToCaptionTextBlock)만 있고
+    글자 칸(CaptionsTextBlock)이 아직 없다. 예전엔 그걸 '창 없음'으로 봐서 '안 보여. Win+Ctrl+L' 을 띄웠고,
+    그 말대로 단축키를 누르면 토글이라 오히려 꺼졌다. → 창만 있으면 찾은 걸로 치고, 칸이 없으면 빈 글자."""
+
+    def __init__(self, win):
+        self.win = win
+        self.box = None
+
+    @property
+    def Name(self):
+        if self.box is not None:
+            try:
+                return self.box.Name or ""
+            except Exception:
+                self.box = None  # 칸이 없어졌다 (조용해짐·창 닫힘) → 아래에서 다시 찾는다
+        b = self.win.Control(searchDepth=6, AutomationId="CaptionsTextBlock")
+        if b.Exists(0, 0):
+            self.box = b
+            return b.Name or ""
+        if not self.win.Exists(0, 0):
+            raise LookupError("실시간 자막 창이 닫혔어")  # 부르는 쪽이 다시 찾기·다시 켜기를 한다
+        return ""
 
 
 def _caption_hwnd():
