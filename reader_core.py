@@ -15,7 +15,7 @@ import uiautomation as auto
 
 from step3_read_translation import SentenceFinalizer, find_window, read_current
 from step4_speak_translation import covered, fragment_reason, new_korean_part
-from local_pipeline import CaptionSegmenter, LocalTranslator, find_caption_box, hide_caption_window, show_caption_window
+from local_pipeline import CaptionSegmenter, LocalTranslator, find_caption_box, hide_caption_window
 
 from paths import DATA as HERE  # 설정·기록·임시 소리를 쓰는 곳 (paths.py)
 
@@ -228,10 +228,10 @@ class Reader:
             if self._log_file:
                 self._log_file.close()
                 self._log_file = None
-        try:
-            show_caption_window()  # 숨겼던 회색 자막 창 되돌리기
-        except Exception:
-            pass
+        # 11/10: 예전엔 멈추면 숨겼던 회색 실시간 자막 창을 되돌렸는데, 접기도 안 되는 창이 화면에 남아 거슬렸다.
+        # 다시 '읽기 시작'하면 앱이 알아서 켜고 숨기니까(v0.3.10) 멈출 땐 아예 끈다.
+        if self.ear_mode() != "whisper":
+            threading.Thread(target=restart_live_captions).start()  # 앱을 닫을 때도 끝까지 끄게 daemon 아님
         tr = getattr(self, "_translator", None)
         if tr:
             threading.Thread(target=tr.unload, daemon=True).start()  # 그래픽 메모리 비우기
