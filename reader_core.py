@@ -48,6 +48,28 @@ def captions_available():
     return os.path.exists(os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "LiveCaptions.exe"))
 
 
+def _default_output_name():
+    """지금 윈도우 기본 출력 장치 이름 (스피커·헤드폰). 못 알아내면 ''.
+    PyAudio 는 켤 때 장치 목록을 굳혀 두니 매번 새로 만들어서 본다 (0.05초쯤)."""
+    try:
+        import pyaudiowpatch as pa
+        p = pa.PyAudio()
+        try:
+            w = p.get_host_api_info_by_type(pa.paWASAPI)
+            return p.get_device_info_by_index(w["defaultOutputDevice"])["name"]
+        finally:
+            p.terminate()
+    except Exception:
+        return ""
+
+
+def restart_live_captions():
+    """실시간 자막을 껐다 켠다 (새 소리 장치를 듣게). 켜는 건 find_caption_box(launch=True) 가 한다."""
+    import subprocess
+    subprocess.run(["taskkill", "/im", "LiveCaptions.exe", "/f"], capture_output=True, creationflags=0x08000000)
+    time.sleep(1.5)
+
+
 class SapiVoice:
     """윈도우 음성 엔진(SAPI). 반드시 만든 스레드에서만 부른다. id = "sapi:<이름>" """
 
@@ -376,6 +398,7 @@ class Reader:
                 seg.prime(box.Name or "")
             except Exception:
                 pass
+            out_dev, next_dev_check = _default_output_name(), time.time() + 5
             while not self._stop.is_set():
                 try:
                     text = box.Name or ""
@@ -385,6 +408,26 @@ class Reader:
                         self.current = {"en": lines[-1], "ko": self.current.get("ko", "")}
                     for en, born in seg.feed(text, now):
                         jobs.put((now, en, born))
+                    # 11/10: 소리 장치를 바꾸면(블루투스 헤드폰 연결 등) 실시간 자막은 예전 장치를 계속 들어서 영어가 안 나온다.
+                    # → 기본 출력 장치가 바뀌면 실시간 자막을 껐다 켜서 새 장치를 듣게 한다.
+                    if now >= next_dev_check:
+                        next_dev_check = now + 5
+                        dev = _default_output_name()
+                        if dev and out_dev and dev != out_dev:
+                            self.status = f"소리 장치가 바뀌어서 실시간 자막 다시 켜는 중 ({dev})"
+                            restart_live_captions()
+                            box = None
+                            while not self._stop.is_set() and box is None:
+                                time.sleep(1)
+                                box = find_caption_box(launch=True)
+                            try:
+                                hide_caption_window()
+                                seg.prime(box.Name or "")
+                            except Exception:
+                                pass
+                            self.status = "듣는 중 · 내 PC 번역"
+                        if dev:
+                            out_dev = dev
                 except Exception:
                     self.status = "실시간 자막 연결이 끊겼어. 다시 찾는 중"
                     time.sleep(1)
