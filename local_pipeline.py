@@ -26,7 +26,30 @@ SYSTEM = """너는 영어 강의를 한국어로 동시통역하는 통역사야
   (agent = 상담원, AI agent = AI 에이전트, ticket = 티켓)
 - 자막이 잘못 알아들은 듯한 고유명사(Zenda Desk → Zendesk)는 바로잡는다.
 - 옮길 문장이 인사말·추임새뿐이거나 뜻을 알 수 없으면 '-' 한 글자만 출력한다.
-- 설명·메모·주석·괄호 설명(Note: …)·따옴표·영어 원문 없이 한국어 번역만 출력한다. 뜻이 애매해도 가장 그럴듯한 번역 하나만."""
+- 설명·메모·주석·괄호 설명(Note: …)·따옴표·영어 원문 없이 한국어 번역만 출력한다. 뜻이 애매해도 가장 그럴듯한 번역 하나만.
+- 번역을 한 번만 쓴다. '더 명확한 번역은…', '추가 설명이 필요하면…' 같은 말, 다시 고쳐 쓴 번역, 대안은 절대 붙이지 않는다.
+- 문장 조각(예: 'Consistency and reporting purposes.')이면 그 조각만 짧게 옮긴다."""
+
+# 11/10: 모델이 번역 뒤에 듣는 사람한테 하는 말을 붙여 자막에 그대로 나왔다.
+#   "…확인하세요. 정확한 이해를 위해 조금 더 명확한 표현이 필요할 수 있으나… 알려주세요. 더 명확한 번역을 위해…"
+#   "가장 적절한 번역은 다음과 같습니다: "…""
+# 이런 말이 든 문장부터는 버린다.
+_META = re.compile(r"번역|명확한 표현|추가 설명|설명이 필요|알려\s?주세요|조정할 수 있|주어진 (?:정보|문장)|원문|문맥상|맥락상|의역")
+
+
+def strip_meta(ko):
+    """번역 앞뒤에 붙은 '번역에 대한 말'을 떼고 번역만 남긴다."""
+    # 첫 문장이 '…번역은 다음과 같습니다: "X"' 모양이면 X 만
+    m = re.match(r"[^:：.?!]*(?:번역|표현)[^:：.?!]*다음과 같[^:：.?!]*[:：]\s*(.+)", ko, re.S)
+    if m:
+        ko = m.group(1)
+    ko = ko.strip().strip('"“”\'').strip()
+    keep = []
+    for s in re.split(r"(?<=[.?!])\s+", ko):
+        if _META.search(s):
+            break
+        keep.append(s)
+    return " ".join(keep).strip().strip('"“”\'').strip()
 
 
 def norm(s):
@@ -216,14 +239,16 @@ class LocalTranslator:
             user += "앞 문장(참고만):\n" + "\n".join(self.ctx[-2:]) + "\n\n"
         user += "옮길 문장:\n" + en
         t = time.time()
-        ko = self._call([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}])
+        # 답 길이를 원문에 맞춰 묶는다 — 번역 뒤에 설명을 길게 늘어놓지 못하게 (11/10)
+        cap = 40 + 5 * len(en.split())
+        ko = self._call([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}], num_predict=cap)
         self.last_sec = time.time() - t
         self.ctx.append(en)
         self.ctx = self.ctx[-4:]
         ko = ko.strip().strip('"“”').strip()
         if ko.startswith("- "):
             ko = ko[2:].strip()  # "- 어떻게…" 처럼 '-' 를 앞에 붙여 답할 때가 있다
-        ko = strip_notes(ko)
+        ko = strip_notes(strip_meta(ko))
         if ko.startswith("(") and ko.endswith(")"):
             return ""  # "(의미 파악 어려움)" 같은 메모는 읽지 않는다
         if ko in ("-", "") or not re.search(r"[가-힣]", ko):
