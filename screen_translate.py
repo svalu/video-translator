@@ -27,13 +27,15 @@ u32 = ctypes.windll.user32
 
 SYSTEM = """너는 Zendesk(고객 상담 소프트웨어) 교육 슬라이드를 한국어로 옮기는 번역가야. 읽는 사람은 한국 콜센터·UX 실무자.
 입력은 화면 글자를 OCR 로 읽은 것이라 오타가 섞여 있다(l↔I, 0↔O, 1↔l, ? 는 못 읽은 글자). 뜻으로 바로잡는다.
+'슬라이드 전체'는 맥락 참고용이고, '번역할 칸'의 각 값만 옮긴다.
 규칙:
-- 번호마다 한 줄씩, 같은 번호로 한국어 번역만 출력한다. 예) 1. 번역문
-- '✓'로 시작하는 줄만 번역도 '✓ '로 시작한다. 없는 숫자(24/7 등)를 지어내지 않는다.
-- 짧고 슬라이드답게(명사형·개조식). 원문보다 길게 늘이지 않는다.
-- 이 용어는 영어 그대로: Zendesk, Copilot, AI agent, IVR, QA, ACW, CSAT, SLA, ticket, macro, trigger, dashboard.
-- 사람 이름·제품 이름·URL·숫자만 있는 줄은 그대로 둔다.
-- 설명·메모 없이 번호 줄만."""
+- 받은 JSON 과 같은 키로, 값만 한국어로 바꾼 JSON 하나만 출력한다. 키를 빼거나 합치지 않는다.
+- 칸 하나 = 그 칸의 글만. 다른 칸 내용을 끌어오지 않는다.
+- 질문은 질문 그대로 옮긴다. 절대 답하거나 예시를 지어내지 않는다.
+- 원문에 없는 기호(✓)·괄호 설명·메모를 붙이지 않는다. 원문이 '✓'로 시작할 때만 '✓ '로 시작한다.
+- 슬라이드답게 짧게(명사형·개조식). 원문보다 길게 늘이지 않는다.
+- 이 용어는 영어 그대로: Zendesk, Copilot, AI agent, IVR, QA, ACW, CSAT, SLA, ROI, ticket, macro, trigger, dashboard.
+- 사람 이름·제품 이름·URL·숫자만 있는 칸은 그대로 둔다."""
 
 
 # ---------- 화면 ----------
@@ -57,14 +59,14 @@ def window_title(h):
 
 
 # ---------- 줄 → 문단 ----------
-_BULLET = re.compile(r"^(?:[✓✔•·▪►>\-–—*]|7|v|V)\s+(?=[A-Z0-9])")
+_BULLET = re.compile(r"^(?:[✓✔•·▪►>\-–—*]|7|v|V)\s+(?=[A-Z0-9]|l[a-z])")
 _JUNK = re.compile(r"https?://|www\.|\.com/|docs\.goog|^[^A-Za-z]*$")
 
 
 def clean_ocr(t):
     """OCR 이 영어를 읽으며 흔히 틀리는 것 바로잡기 (한국어 엔진·영어 엔진 둘 다)."""
     t = t.strip()
-    t = re.sub(r"^(?:7|v|V|J|/)\s+(?=[A-Z0-9])", "✓ ", t)          # 체크표시 ✓ 를 7 로 읽음
+    t = re.sub(r"^(?:7|v|V|J|/)\s+(?=[A-Z0-9]|l[a-z])", "✓ ", t)          # 체크표시 ✓ 를 7 로 읽음
     t = re.sub(r"(?<=[A-Za-z0-9/ ])시(?=\s|&|$)", "AI", t)            # AI 를 '시'로 읽음 (한국어 엔진)
     t = re.sub(r"\bA[1l]\b", "AI", t)                                  # AI 를 A1·Al 로 읽음 (영어 엔진, 11/08)
     t = re.sub(r"\b2417\b", "24/7", t)
@@ -81,7 +83,12 @@ def keep_line(ln):
         return False
     if _JUNK.search(t):
         return False
-    return sum(c.isalpha() for c in t) >= 3
+    # 11/10: 화상회의 이름표·얼굴 무늬를 OCR 이 'ⅵ亟曇S?' 같은 글자로 읽어서 번역이 밀렸다
+    chars = [c for c in t if not c.isspace()]
+    latin = sum(1 for c in chars if c.isascii() and c.isalpha())
+    if latin < 3 or latin < len(chars) * 0.6:
+        return False
+    return bool(re.search(r"[A-Za-z]{3,}", t))
 
 
 def group_blocks(lines, top_skip=0):
@@ -119,38 +126,59 @@ def group_blocks(lines, top_skip=0):
 _cache = {}
 
 
-def _ask(chunk, model):
-    """번호 붙여 한 번에 보내고 {번호: 번역} 으로 받는다. 같은 번호가 또 나오면(모델이 되풀이) 처음 것만."""
-    user = "\n".join(f"{n}. {t}" for n, t in enumerate(chunk, 1))
-    body = json.dumps({"model": model, "stream": False, "keep_alive": "30m",
+def _ask(chunk, model, context=None):
+    """{번호: 영어} JSON 을 보내고 {번호: 한국어} 로 받는다 (Ollama format=json — 번호가 밀리거나 빠지는 걸 막는다)."""
+    src = {str(n): t for n, t in enumerate(chunk, 1)}
+    user = ""
+    if context:
+        user += "슬라이드 전체(참고만):\n" + "\n".join(context[:40]) + "\n\n"
+    user += "번역할 칸:\n" + json.dumps(src, ensure_ascii=False)
+    body = json.dumps({"model": model, "stream": False, "keep_alive": "30m", "format": "json",
                        "options": {"temperature": 0.1, "num_predict": 60 * len(chunk) + 100},
                        "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]}).encode()
     req = urllib.request.Request(OLLAMA, body, {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=180) as r:
         out = json.load(r)["message"]["content"]
+    try:
+        d = json.loads(out)
+    except ValueError:
+        return {}
     got = {}
-    for line in out.splitlines():
-        m = re.match(r"\s*(\d+)[.)]\s*(.+)", line)
-        if m and 1 <= int(m.group(1)) <= len(chunk):
-            got.setdefault(int(m.group(1)), m.group(2).strip())
-    if len(chunk) == 1 and 1 not in got:  # 하나만 보냈는데 번호 없이 답함 → 첫 줄을 번역으로
-        first = next((l.strip() for l in out.splitlines() if l.strip()), "")
-        if first:
-            got[1] = first
+    for k, v in (d.items() if isinstance(d, dict) else []):
+        if str(k).isdigit() and 1 <= int(k) <= len(chunk) and isinstance(v, str):
+            ko = tidy(chunk[int(k) - 1], v)
+            if ko:
+                got[int(k)] = ko
     return got
 
 
-def translate_blocks(texts, model, size=14, on_progress=None):
+def tidy(src, ko):
+    """모델이 붙인 군더더기 떼기 + 이상한 번역 거르기 (빈 문자열이면 하나씩 다시 묻는다)."""
+    ko = ko.strip().strip('"“”').strip()
+    if not src.startswith("✓"):
+        ko = re.sub(r"^[✓✔]\s*", "", ko)               # 원문에 없는 체크표시
+    elif not ko.startswith(("✓", "✔")):
+        ko = "✓ " + ko                                    # 원문엔 있는데 빠뜨린 체크표시
+    if "(" not in src:
+        ko = re.sub(r"\s*[\(（][^\)）]*[\)）]?\s*$", "", ko)  # 원문에 없는 괄호 설명(끝에 붙는 것)
+    if not re.search(r"[가-힣A-Za-z0-9]", ko):
+        return ""
+    if len(ko) > len(src) * 1.6 + 12:                    # 원문보다 훨씬 길면 지어낸 것 (질문에 답하기 등)
+        return ""
+    return ko
+
+
+def translate_blocks(texts, model, size=14, on_progress=None, context=None):
     """11/08: EXAONE 이 여러 블록을 받으면 2번을 1번 아래 들여쓰기로 붙이고 번호를 빼먹어서 빈칸이 됐다.
     → 짝이 안 맞은 블록만 하나씩 다시 묻는다. 빈 번역은 캐시에 안 넣는다(다음에 누르면 다시 시도)."""
     todo = [t for t in dict.fromkeys(texts) if t not in _cache]
     for i in range(0, len(todo), size):  # 너무 길면 나눠서
         chunk = todo[i:i + size]
-        got = _ask(chunk, model)
+        got = _ask(chunk, model, context)
         for n, t in enumerate(chunk, 1):
             ko = got.get(n, "")
-            if not ko and len(chunk) > 1:
-                ko = _ask([t], model).get(1, "")
+            if not ko:
+                ko = _ask([t], model, context).get(1, "")
             if ko:
                 _cache[t] = ko
         if on_progress:
@@ -283,9 +311,12 @@ class ScreenTranslator:
         if self.shown and self.base is not None and not self.busy:
             try:
                 now = ImageGrab.grab(self.rect, all_screens=True).convert("L").resize(self.base.size)
-                diff = ImageStat.Stat(ImageChops.difference(now, self.base)).mean[0]
-                if diff > 6:
-                    self.hide()
+                if self._slide_changed(now):
+                    self._changed_ticks = getattr(self, "_changed_ticks", 0) + 1
+                    if self._changed_ticks >= 2:   # 두 번 연달아(약 1.4초) 바뀌어 있어야 걷는다
+                        self.hide()
+                else:
+                    self._changed_ticks = 0
             except Exception:
                 pass
         self.root.after(700, self._tick)
@@ -352,12 +383,27 @@ class ScreenTranslator:
 
             self.events.put(("toast", f"번역 중… 0/{len(blocks)}칸"))
             progress()  # 캐시에 있던 칸은 바로
-            translate_blocks(texts, self.model, size=4, on_progress=progress)
+            translate_blocks(texts, self.model, size=4, on_progress=progress, context=texts)
             progress()
             self.events.put(("done", time.time() - t0))
         except Exception as e:
             self.events.put(("toast", f"화면 번역 실패: {type(e).__name__}"))
             self.busy = False
+
+    def _slide_changed(self, now):
+        """11/10: 예전엔 화면 전체 평균 차이로 봐서 화상회의 얼굴·재생 막대·마우스만 움직여도 덮개가 걷혔다.
+        → 번역한 칸 자리만 비교해서, 칸의 3분의 1 넘게 글이 바뀌었을 때만 '슬라이드가 바뀜'."""
+        blocks = getattr(self, "_blocks", [])
+        if not blocks:
+            return False
+        sx = self.base.width / max(1, self.rect[2] - self.rect[0])
+        changed = 0
+        for b in blocks:
+            box = (int(b["x"] * sx), int(b["y"] * sx), int((b["x"] + b["w"]) * sx) + 1, int((b["y"] + b["h"]) * sx) + 1)
+            d = ImageStat.Stat(ImageChops.difference(now.crop(box), self.base.crop(box))).mean[0]
+            if d > 14:
+                changed += 1
+        return changed >= max(1, len(blocks) / 3)
 
     def _below_subtitles(self):
         """화면 번역 덮개는 한국어 자막 줄 밑에 (자막이 덮개에 가려지지 않게). 둘 다 '항상 위'라 순서를 직접 정한다."""
@@ -374,29 +420,12 @@ class ScreenTranslator:
         self.win.deiconify()
         self._style()
         self._below_subtitles()
-        hs = sorted(b["line_h"] for b in blocks)
-        body_h = hs[len(hs) // 2]
-        for b in blocks:
-            if not b.get("ko"):
-                continue
-            x, y, w, h = int(b["x"]) - 3, int(b["y"]) - 2, int(b["w"]) + 6, int(b["h"]) + 4
-            self.cv.create_rectangle(x, y, x + w, y + h, fill=b["bg"], outline=b["bg"])
-            bold = b["line_h"] > body_h * 1.25
-            size = int(b["line_h"] * 0.82)
-            while size >= 9:  # 칸에 들어갈 때까지 줄인다
-                f = tkfont.Font(family=self.fam, size=-size, weight="bold" if bold else "normal")
-                item = self.cv.create_text(x + 3, y + 1, text=b["ko"], font=f, fill=b["fg"], width=w + int(w * 0.12), anchor="nw")
-                bx = self.cv.bbox(item)
-                if bx[3] - bx[1] <= h + 4 or size == 9:
-                    if bx[2] > x + w:  # 오른쪽으로 넘치면 배경을 조금 늘림
-                        self.cv.create_rectangle(x + w, y, bx[2] + 3, y + h, fill=b["bg"], outline=b["bg"])
-                        self.cv.tag_raise(item)
-                    if bx[3] > y + h:
-                        self.cv.create_rectangle(x, y + h, max(x + w, bx[2] + 3), bx[3] + 2, fill=b["bg"], outline=b["bg"])
-                        self.cv.tag_raise(item)
-                    break
-                self.cv.delete(item)
-                size -= 1
+        from PIL import ImageTk
+        import overlay_render
+        img = overlay_render.render((x1 - x0, y1 - y0), blocks, key=(255, 0, 254))
+        self._photo = ImageTk.PhotoImage(img)  # 참조를 잡아 둬야 화면에서 안 사라진다
+        self.cv.create_image(0, 0, image=self._photo, anchor="nw")
+        self._blocks = [b for b in blocks if b.get("ko")]
         self.shown = True
         self.base = base
         if done is not None and done < total:

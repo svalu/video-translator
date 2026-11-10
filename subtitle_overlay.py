@@ -77,7 +77,9 @@ class Overlay:
         sw, sh = bg.winfo_screenwidth(), bg.winfo_screenheight()
         self.w = int(sw * 0.62)
         self.x = self.pref.get("x", (sw - self.w) // 2)
-        self.y = self.pref.get("y", sh - 230)
+        # 11/10 아래쪽 기준: 자막이 길어지거나 글자가 커지면 위로 자란다 (아랫변은 그 자리). 예전 설정(y)은 아랫변으로 바꿔 읽는다
+        self.bottom = self.pref.get("bottom", self.pref["y"] + 114 if "y" in self.pref else sh - 116)
+        self.y = self.bottom - 114
         # 글자는 캔버스에 직접 그린다: 테두리(8방향으로 조금씩 밀어 그린 그림자) 위에 본문
         self.cv = tk.Canvas(top, width=self.w, height=60, highlightthickness=0, bd=0)
         self.cv.pack(fill="both", expand=True)
@@ -104,6 +106,7 @@ class Overlay:
         """글자판 크기에 배경판을 맞추고, 글자판을 위로."""
         self.top.update_idletasks()
         w, h = max(self.w, self.top.winfo_reqwidth()), self.top.winfo_reqheight()
+        self.y = self.bottom - h  # 아랫변 고정
         key = (w, h, self.x, self.y)
         # 처음 뜰 때는 위치 지정이 무시될 수 있어서, 실제 자리가 다르면 다시 맞춘다
         moved = (self.top.winfo_x(), self.top.winfo_y()) != (self.x, self.y)
@@ -196,6 +199,7 @@ class Overlay:
 
     def _drag(self, e):
         self.x, self.y = e.x_root - self._dx, e.y_root - self._dy
+        self.bottom = self.y + self.top.winfo_height()
         self._sync()
 
     def _post(self, patch):
@@ -220,7 +224,7 @@ class Overlay:
     def _save(self):
         try:
             with open(PREF, "w", encoding="utf-8") as f:
-                json.dump({"x": self.x, "y": self.y}, f)
+                json.dump({"x": self.x, "bottom": self.bottom}, f)
         except OSError:
             pass
 
