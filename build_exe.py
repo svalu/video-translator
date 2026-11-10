@@ -15,10 +15,15 @@ import PyInstaller.__main__
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE)
 
+# 11/10: dist\VideoTranslator 폴더를 탐색기·백신 등이 붙잡고 있으면 PyInstaller 가 폴더째 지우다 실패한다
+# (안은 비워도 폴더 자체는 못 지움, 안에 쓰기는 됨). → 다른 곳(build\_out)에 만들고 내용만 옮겨 담는다.
+_OUT = os.path.join(HERE, "build", "_out")
+
 PyInstaller.__main__.run([
     "app.py",
     "--name", "VideoTranslator",
     "--noconfirm", "--clean",
+    "--distpath", _OUT,
     "--windowed",                       # 검은 창 없이
     "--icon", os.path.join("ui", "brand", "app.ico"),
     "--add-data", f"ui{os.pathsep}ui",  # 화면·아이콘
@@ -38,6 +43,14 @@ PyInstaller.__main__.run([
     "--exclude-module", "nvidia",
     "--exclude-module", "pyttsx3",      # 예전 방식에서만 썼다
 ])
+
+# build\_out\VideoTranslator → dist\VideoTranslator : 폴더는 두고 안의 것만 갈아 끼운다
+_dst = os.path.join(HERE, "dist", "VideoTranslator")
+os.makedirs(_dst, exist_ok=True)
+for _n in os.listdir(_dst):
+    _p = os.path.join(_dst, _n)
+    shutil.rmtree(_p) if os.path.isdir(_p) else os.remove(_p)
+shutil.copytree(os.path.join(_OUT, "VideoTranslator"), _dst, dirs_exist_ok=True)
 
 # C++ 런타임 바꿔 넣기 (11/08): PyInstaller 가 어느 패키지에서 오래된 MSVCP140.dll(14.36)을 주워 넣는데,
 # Whisper 엔진(ctranslate2)은 새 컴파일러(14.40+)로 만들어져서 std::mutex 쓰는 순간 0xc0000005 로 exe 가 통째로 죽는다.
