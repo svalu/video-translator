@@ -140,12 +140,12 @@ def _ask(chunk, model):
     return got
 
 
-def translate_blocks(texts, model):
+def translate_blocks(texts, model, size=14, on_progress=None):
     """11/08: EXAONE 이 여러 블록을 받으면 2번을 1번 아래 들여쓰기로 붙이고 번호를 빼먹어서 빈칸이 됐다.
     → 짝이 안 맞은 블록만 하나씩 다시 묻는다. 빈 번역은 캐시에 안 넣는다(다음에 누르면 다시 시도)."""
     todo = [t for t in dict.fromkeys(texts) if t not in _cache]
-    for i in range(0, len(todo), 14):  # 너무 길면 나눠서
-        chunk = todo[i:i + 14]
+    for i in range(0, len(todo), size):  # 너무 길면 나눠서
+        chunk = todo[i:i + size]
         got = _ask(chunk, model)
         for n, t in enumerate(chunk, 1):
             ko = got.get(n, "")
@@ -153,6 +153,8 @@ def translate_blocks(texts, model):
                 ko = _ask([t], model).get(1, "")
             if ko:
                 _cache[t] = ko
+        if on_progress:
+            on_progress()
     return [_cache.get(t, "") for t in texts]
 
 
@@ -248,6 +250,9 @@ class ScreenTranslator:
                     self.toggle()
                 elif kind == "draw":
                     self._draw(*arg)
+                elif kind == "done":
+                    self.busy = False
+                    self._toast(f"번역 덮음 · {arg:.1f}초 · 다시 Ctrl+Shift+T 면 원문", 2500)
                 elif kind == "toast":
                     self._toast(arg)
         except queue.Empty:
@@ -272,6 +277,8 @@ class ScreenTranslator:
         h, rect = foreground_rect(self._own())
         if h:
             self.last_fore = (h, rect)
+        if self.shown:
+            self._below_subtitles()
         # 덮개가 떠 있는데 아래 화면이 바뀌면 걷는다 (슬라이드 넘김·스크롤)
         if self.shown and self.base is not None and not self.busy:
             try:
@@ -329,23 +336,44 @@ class ScreenTranslator:
                 self.events.put(("toast", "영어 글자를 못 찾았어요"))
                 self.busy = False
                 return
-            self.events.put(("toast", f"번역 중… ({len(blocks)}칸)"))
-            kos = translate_blocks([b["text"] for b in blocks], self.model)
-            for b, ko in zip(blocks, kos):
-                b["ko"] = ko
+            # 11/10 속도: 2060 은 모델 24%가 CPU 라 출력이 초당 13토큰 → 한 장(20칸) 20초.
+            # 다 끝날 때까지 기다리지 않고 위에서부터 4칸씩 번역해서 되는 대로 덮는다 (첫 칸 3~5초).
+            blocks.sort(key=lambda b: (round(b["y"] / 12), b["x"]))
+            for b in blocks:
                 b["bg"], b["fg"] = box_colors(img, int(b["x"]), int(b["y"]), int(b["w"]), int(b["h"]))
             base = img.convert("L").resize((max(1, img.width // 8), max(1, img.height // 8)))
-            self.events.put(("draw", (rect, blocks, base, time.time() - t0)))
+            texts = [b["text"] for b in blocks]
+
+            def progress():
+                for b in blocks:
+                    b["ko"] = _cache.get(b["text"], "")
+                done = sum(1 for b in blocks if b["ko"])
+                self.events.put(("draw", (rect, [dict(b) for b in blocks], base, time.time() - t0, done, len(blocks))))
+
+            self.events.put(("toast", f"번역 중… 0/{len(blocks)}칸"))
+            progress()  # 캐시에 있던 칸은 바로
+            translate_blocks(texts, self.model, size=4, on_progress=progress)
+            progress()
+            self.events.put(("done", time.time() - t0))
         except Exception as e:
             self.events.put(("toast", f"화면 번역 실패: {type(e).__name__}"))
             self.busy = False
 
-    def _draw(self, rect, blocks, base, secs):
+    def _below_subtitles(self):
+        """화면 번역 덮개는 한국어 자막 줄 밑에 (자막이 덮개에 가려지지 않게). 둘 다 '항상 위'라 순서를 직접 정한다."""
+        sub = u32.FindWindowW(None, "한국어 자막 배경")
+        if not sub:
+            return
+        me = u32.GetParent(self.win.winfo_id()) or self.win.winfo_id()
+        u32.SetWindowPos(me, sub, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)  # NOSIZE|NOMOVE|NOACTIVATE
+
+    def _draw(self, rect, blocks, base, secs, done=None, total=None):
         x0, y0, x1, y1 = rect
         self.win.geometry(f"{x1 - x0}x{y1 - y0}+{x0}+{y0}")
         self.cv.delete("all")
         self.win.deiconify()
         self._style()
+        self._below_subtitles()
         hs = sorted(b["line_h"] for b in blocks)
         body_h = hs[len(hs) // 2]
         for b in blocks:
@@ -370,9 +398,9 @@ class ScreenTranslator:
                 self.cv.delete(item)
                 size -= 1
         self.shown = True
-        self.busy = False
         self.base = base
-        self._toast(f"번역 덮음 · {secs:.1f}초 · 다시 Ctrl+Shift+T 면 원문", 2500)
+        if done is not None and done < total:
+            self._toast(f"번역 중… {done}/{total}칸", 60000)
 
     def _toast(self, text, ms=None):
         """덮개 위쪽 가운데에 작은 알림."""
