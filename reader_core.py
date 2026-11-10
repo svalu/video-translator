@@ -380,13 +380,8 @@ class Reader:
         if self.ear_mode() == "whisper":
             return self._whisper_listen(jobs)
         with auto.UIAutomationInitializerInThread():
-            box = None
-            while not self._stop.is_set() and box is None:
-                box = find_caption_box(launch=True)
-                if box is None:
-                    self.status = "실시간 자막이 안 보여. Win+Ctrl+L 로 켜 줘"
-                    time.sleep(2)
-            if self._stop.is_set():
+            box = self._find_box_hard()
+            if box is None:
                 return
             self.status = f"듣는 중 · 내 PC 번역"
             try:
@@ -416,10 +411,9 @@ class Reader:
                         if dev and out_dev and dev != out_dev:
                             self.status = f"실시간 자막 다시 켜는 중 · 소리 장치가 {dev}(으)로 바뀜"
                             restart_live_captions()
-                            box = None
-                            while not self._stop.is_set() and box is None:
-                                time.sleep(1)
-                                box = find_caption_box(launch=True)
+                            box = self._find_box_hard()
+                            if box is None:
+                                return
                             try:
                                 hide_caption_window()
                                 seg.prime(box.Name or "")
@@ -431,7 +425,9 @@ class Reader:
                 except Exception:
                     self.status = "실시간 자막 연결이 끊겼어. 다시 찾는 중"
                     time.sleep(1)
-                    box = find_caption_box(launch=True)
+                    box = self._find_box_hard()  # 11/10: 예전엔 못 찾으면 box=None 인 채로 돌아서 계속 '끊겼어'만 떴다
+                    if box is None:
+                        return
                     if box is not None:
                         try:
                             hide_caption_window()  # 11/10: 다시 켜진 실시간 자막 창이 화면에 그대로 떠 있던 것
@@ -439,6 +435,27 @@ class Reader:
                             pass
                         self.status = "듣는 중 · 내 PC 번역"
                 time.sleep(0.3)
+
+    def _find_box_hard(self):
+        """실시간 자막 창을 찾는다. 못 찾으면 앱이 직접 껐다 켠다. 멈추면 None.
+        11/10: 프로세스는 살아 있는데 창을 못 찾는 때가 있었다. 그때 'Win+Ctrl+L 로 켜 줘'라고 하면
+        단축키가 켜고 끄는 토글이라 살아 있던 걸 꺼 버리거나, 앱이 2초마다 켜는 것과 엇갈려 잘 안 떠졌다.
+        → 사람한테 맡기지 않는다. 끄고 새로 켜기를 되풀이하고, 세 번 넘게 안 되면 그때 알려 준다."""
+        tries = 0
+        while not self._stop.is_set():
+            box = find_caption_box(launch=True)
+            if box is not None:
+                return box
+            if self._stop.is_set():
+                break
+            tries += 1
+            if tries <= 3:
+                self.status = "실시간 자막 다시 켜는 중" + (f" · {tries}번째" if tries > 1 else "")
+            else:
+                self.status = "실시간 자막이 안 떠 · 10초 뒤 다시 해 볼게. 단축키는 누르지 마"
+                self._stop.wait(10)
+            restart_live_captions()
+        return None
 
     def _whisper_listen(self, jobs):
         """귀 = Whisper: PC 소리를 직접 받아쓴다 (윈10 에서도). 끝난 영어 문장은 실시간 자막 때와 같은 번역 줄로."""
