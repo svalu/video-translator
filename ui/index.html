@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1024 1024%22%3E%3Crect width=%221024%22 height=%221024%22 rx=%22224%22 fill=%22#111318%22/%3E%3Crect x=%22150%22 y=%22170%22 width=%22460%22 height=%22390%22 rx=%22110%22 fill=%22#fff%22/%3E%3Cpath d=%22M191 550H311L211 655z%22 fill=%22#fff%22/%3E%3Crect x=%22380%22 y=%22380%22 width=%22528%22 height=%22458%22 rx=%22144%22 fill=%22#111318%22/%3E%3Cpath d=%22M679 794H867L833 947z%22 fill=%22#111318%22/%3E%3Crect x=%22414%22 y=%22414%22 width=%22460%22 height=%22390%22 rx=%22110%22 fill=%22#1f6bff%22/%3E%3Cpath d=%22M713 794H833L813 899z%22 fill=%22#1f6bff%22/%3E%3Ctext x=%22325%22 y=%22470%22 font-family=%22Segoe UI,Arial,sans-serif%22 font-weight=%22700%22 font-size=%22300%22 text-anchor=%22middle%22 fill=%22#111318%22%3EA%3C/text%3E%3Ctext x=%22644%22 y=%22700%22 font-family=%22Malgun Gothic,Pretendard,sans-serif%22 font-weight=%22700%22 font-size=%22270%22 text-anchor=%22middle%22 fill=%22#fff%22%3E%EA%B0%80%3C/text%3E%3C/svg%3E">
-<title>동영상 번역기</title>
+<title>동영상 동시 통역기</title>
 <style>
 /* 작은 세로 창. 회색 바탕 위 흰 카드, 파란 강조 (배지 대시보드와 같은 결) */
 :root {
@@ -137,7 +137,7 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
 </head>
 <body>
   <header class="head">
-    <h1 class="ic brand"><svg viewBox="0 0 1024 1024" width="24" height="24" aria-hidden="true"><rect width="1024" height="1024" rx="224" fill="#111318"/><rect x="150" y="170" width="460" height="390" rx="110" fill="#fff"/><path d="M191 550H311L211 655z" fill="#fff"/><rect x="380" y="380" width="528" height="458" rx="144" fill="#111318"/><path d="M679 794H867L833 947z" fill="#111318"/><rect x="414" y="414" width="460" height="390" rx="110" fill="#1f6bff"/><path d="M713 794H833L813 899z" fill="#1f6bff"/><text x="325" y="470" font-family="Segoe UI,Arial,sans-serif" font-weight="700" font-size="300" text-anchor="middle" fill="#111318">A</text><text x="644" y="700" font-family="Malgun Gothic,Pretendard,sans-serif" font-weight="700" font-size="270" text-anchor="middle" fill="#fff">가</text></svg><span>동영상 번역기</span><span id="ver" style="font-size:11px;font-weight:600;color:var(--ink-2);margin-left:2px"></span></h1>
+    <h1 class="ic brand"><svg viewBox="0 0 1024 1024" width="24" height="24" aria-hidden="true"><rect width="1024" height="1024" rx="224" fill="#111318"/><rect x="150" y="170" width="460" height="390" rx="110" fill="#fff"/><path d="M191 550H311L211 655z" fill="#fff"/><rect x="380" y="380" width="528" height="458" rx="144" fill="#111318"/><path d="M679 794H867L833 947z" fill="#111318"/><rect x="414" y="414" width="460" height="390" rx="110" fill="#1f6bff"/><path d="M713 794H833L813 899z" fill="#1f6bff"/><text x="325" y="470" font-family="Segoe UI,Arial,sans-serif" font-weight="700" font-size="300" text-anchor="middle" fill="#111318">A</text><text x="644" y="700" font-family="Malgun Gothic,Pretendard,sans-serif" font-weight="700" font-size="270" text-anchor="middle" fill="#fff">가</text></svg><span>동영상 동시 통역기</span><span id="ver" style="font-size:11px;font-weight:600;color:var(--ink-2);margin-left:2px"></span></h1>
     <button class="icon-btn" id="setupBtn" type="button" title="준비 점검" aria-label="준비 점검" data-icon="Settings02"></button>
   </header>
 
@@ -399,7 +399,7 @@ async function poll() {
   try { render(await api("/api/state")); } catch (e) {
     $("status").className = "state warn";
     if (updating) { $("stMain").textContent = "업데이트 중"; $("stDetail").textContent = "끝나면 새 창이 떠. 이 창은 닫혀도 괜찮아"; }
-    else { $("stMain").textContent = "앱 연결 끊김"; $("stDetail").textContent = "동영상 번역기를 다시 켜 줘"; }
+    else { $("stMain").textContent = "앱 연결 끊김"; $("stDetail").textContent = "동영상 동시 통역기를 다시 켜 줘"; }
   }
 }
 setInterval(poll, 600); poll();

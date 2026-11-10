@@ -1,4 +1,4 @@
-"""동영상 번역기 앱 (11/06 이름 바꿈, 예전 이름: 자막 읽어주기).
+"""동영상 동시 통역기 앱 (11/06 이름 바꿈, 예전 이름: 자막 읽어주기).
 
 파이썬이 PC 안에서만(127.0.0.1) 화면(ui/index.html)과 API를 내주고,
 WebView2 창(pywebview)으로 띄운다. 창을 닫으면 앱이 끝난다. pywebview 가 없으면 예전처럼 Edge '앱 모드'.
@@ -101,7 +101,7 @@ def state():
     return {**reader.state(), "screen_req": screen_req[0], "version": VERSION, "update": dict(updater.info)}
 
 
-TITLE = "동영상 번역기"
+TITLE = "동영상 동시 통역기"
 ICON = os.path.join(RES, "ui", "brand", "app.ico")  # 창 제목줄·작업 표시줄 = 앱 아이콘 (11/08: 메이커 마크는 '만든 사람' 자리로)
 APP_ID = "Heerang.VideoTranslator"
 
@@ -199,7 +199,7 @@ def main():
     if "--screen" in sys.argv:
         from screen_translate import main as screen_main
         return screen_main()
-    try:  # 작업 표시줄에서 python 이 아니라 '동영상 번역기'로 따로 묶이게
+    try:  # 작업 표시줄에서 python 이 아니라 '동영상 동시 통역기'로 따로 묶이게
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     except Exception:
@@ -212,7 +212,7 @@ def main():
     os.makedirs(os.path.join(HERE, "logs"), exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    print("동영상 번역기:", url)
+    print("동영상 동시 통역기:", url)
     open_screen()
     updater.start()
 

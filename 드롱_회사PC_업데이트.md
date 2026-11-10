@@ -1,6 +1,6 @@
-# 드롱용: 회사 PC 동영상 번역기를 최신판으로 (처음 한 번)
+# 드롱용: 회사 PC 동영상 동시 통역기를 최신판으로 (처음 한 번)
 
-> 희랑이 "동영상 번역기 업데이트해줘"라고 하면 이 문서대로 **드롱이 직접** 한다.
+> 희랑이 "동영상 동시 통역기 업데이트해줘"라고 하면 이 문서대로 **드롱이 직접** 한다.
 > 희랑에게 명령어를 넘기지 않는다 ("파워쉘은 알아서 해줘" — 2026-11-08 다시 들음).
 > 되돌릴 수 있는 건 묻지 말고 하고, 결과만 짧게 말한다.
 
@@ -57,7 +57,7 @@ $r = Invoke-WebRequest http://127.0.0.1:8765/api/state -UseBasicParsing
 ([Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray()) | ConvertFrom-Json) | Select-Object version, ear, @{n='새버전띠';e={$_.update.available}}
 ```
 - 빌드 커밋 = HEAD (뒤에 `dirty` 없음)
-- 창 제목 '동영상 번역기' 가 떠 있음
+- 창 제목 '동영상 동시 통역기' 가 떠 있음
 - `version` 이 GitHub 의 `version.py` 와 같음, `ear` = **captions** (회사 PC 는 윈11 → 실시간 자막을 귀로), 새버전띠 = False
 
 ## 5. 설정 옮기기 (필요할 때만)
@@ -70,11 +70,11 @@ foreach ($f in "settings.json", ".overlay.json") { if ((Test-Path "$repo\$f") -a
 
 ## 6. 기록하고 희랑에게 한두 줄
 ```powershell
-powershell -NoProfile -File "H:\AI by heerang\mdlog.ps1" -Who "회사드롱" -Title "회사 PC 동영상 번역기 최신판으로" -Body "버전·커밋, 보관한 것(있으면), 확인 결과"
+powershell -NoProfile -File "H:\AI by heerang\mdlog.ps1" -Who "회사드롱" -Title "회사 PC 동영상 동시 통역기 최신판으로" -Body "버전·커밋, 보관한 것(있으면), 확인 결과"
 ```
 (회사 PC 에 mdlog.ps1 경로가 다르면 그 PC 의 CLAUDE.md 에 적힌 경로로.)
 
-희랑에게: "회사 PC 동영상 번역기 vX 로 올렸어. 이제부터 새 버전 나오면 앱 위에 띠가 뜨니까 누르기만 하면 돼." + 보관한 게 있으면 그 사실.
+희랑에게: "회사 PC 동영상 동시 통역기 vX 로 올렸어. 이제부터 새 버전 나오면 앱 위에 띠가 뜨니까 누르기만 하면 돼." + 보관한 게 있으면 그 사실.
 
 ## 회사 PC 에서 알아 둘 것
 - 윈11 이라 귀는 '자동' = 윈도우 실시간 자막(예전과 같은 방식). Whisper·GPU 부품(2GB)은 필요 없다.

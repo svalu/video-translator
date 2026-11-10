@@ -241,7 +241,7 @@ class ScreenTranslator:
 
     def _own(self):
         out = set()
-        for t in (TITLE, "한국어 자막", "한국어 자막 배경", "동영상 번역기"):
+        for t in (TITLE, "한국어 자막", "한국어 자막 배경", "동영상 동시 통역기", "동영상 번역기"):
             h = u32.FindWindowW(None, t)
             if h:
                 out.add(h)

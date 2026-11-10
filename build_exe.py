@@ -1,4 +1,4 @@
-"""동영상 번역기를 exe 로 묶는다 (PyInstaller, 폴더 방식).
+"""동영상 동시 통역기를 exe 로 묶는다 (PyInstaller, 폴더 방식).
 
 실행: .venv\\Scripts\\python.exe build_exe.py
 결과: dist\\VideoTranslator\\VideoTranslator.exe  (+ 같은 폴더의 _internal)
@@ -88,7 +88,7 @@ shutil.make_archive(zip_base, "zip", os.path.dirname(dist), "VideoTranslator")
 # 누르면 "Failed to load Python DLL" 이 뜬다(11/08 실제로 헷갈림). 완성본은 dist\ 에만 남긴다.
 shutil.rmtree(os.path.join(HERE, "build"), ignore_errors=True)
 
-# 바탕화면·시작 메뉴 '동영상 번역기' 바로가기 → 완성본 exe (11/08: build\ 의 가짜 exe 를 눌러 헤맨 뒤로)
+# 바탕화면·시작 메뉴 '동영상 동시 통역기' 바로가기 → 완성본 exe (11/08: build\ 의 가짜 exe 를 눌러 헤맨 뒤로)
 # 한글 이름이라 PowerShell 에 UTF-16 으로 넘긴다 (bat/콘솔 코드페이지에 안 휘둘리게)
 import base64
 import subprocess
@@ -96,9 +96,10 @@ _exe = os.path.join(dist, "VideoTranslator.exe")
 _ps = (
     "$ws = New-Object -ComObject WScript.Shell; "
     "foreach ($d in [Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs')) { "
-    "$l = $ws.CreateShortcut((Join-Path $d '동영상 번역기.lnk')); "
+    "$l = $ws.CreateShortcut((Join-Path $d '동영상 동시 통역기.lnk')); "
     f"$l.TargetPath = '{_exe}'; $l.WorkingDirectory = '{dist}'; $l.IconLocation = '{_exe},0'; "
-    "$l.Description = '영어 영상·화면을 한국어로 (희랑)'; $l.Save() }"
+    "$l.Description = '영어 영상·화면을 한국어로 (희랑)'; $l.Save(); "
+    "Remove-Item (Join-Path $d '동영상 번역기.lnk') -ErrorAction SilentlyContinue }"  # 11/10 옛 이름 바로가기 정리
 )
 subprocess.run(["powershell", "-NoProfile", "-EncodedCommand", base64.b64encode(_ps.encode("utf-16-le")).decode()],
                check=False, capture_output=True)
