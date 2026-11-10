@@ -24,7 +24,8 @@ from version import VERSION
 PORT = 8765
 UI = os.path.join(RES, "ui", "index.html")
 reader = Reader()
-setup = Setup(lambda: reader.settings["local_model"])
+setup = Setup(lambda: reader.settings["local_model"], lambda m: reader.update({"local_model": m}),
+              lambda: reader.settings.get("ear", "auto"))
 updater = Updater()  # 새 버전 알림 (GitHub main 과 비교)
 screen_req = [0]  # 앱 창의 '화면 번역' 버튼을 누른 횟수 — 화면 번역 프로세스가 보고 움직인다
 last_ping = [time.time()]

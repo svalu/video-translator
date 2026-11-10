@@ -19,6 +19,7 @@ import re
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -80,17 +81,29 @@ def download_cuda(progress=None):
             files = json.load(r)["urls"]
         url = next(f["url"] for f in files if f["filename"].endswith("win_amd64.whl"))
         tmp = os.path.join(tmp_dir, os.path.basename(url))
-        with urllib.request.urlopen(url, timeout=60) as r, open(tmp, "wb") as f:
-            total = int(r.headers.get("Content-Length") or 0)
-            got = 0
-            while True:
-                chunk = r.read(1 << 20)
-                if not chunk:
-                    break
-                f.write(chunk)
-                got += len(chunk)
-                if progress and total:
-                    progress(int((i + got / total) * 100 / len(CUDA_WHEELS)), f"{pkg} {got >> 20}/{total >> 20}MB")
+        # 11/11: 받는 중에 앱이 꺼지면(업데이트 등) 처음부터 다시 받았다 → 받다 만 파일이 있으면 이어 받는다
+        have = os.path.getsize(tmp) if os.path.exists(tmp) else 0
+        req = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
+        try:
+            r = urllib.request.urlopen(req, timeout=60)
+        except urllib.error.HTTPError as e:
+            if e.code != 416:  # 416 = 이미 다 받아 둔 파일
+                raise
+            r = None
+        if r is not None:
+            with r:
+                resumed = have and r.status == 206
+                total = int(r.headers.get("Content-Length") or 0) + (have if resumed else 0)
+                got = have if resumed else 0
+                with open(tmp, "ab" if resumed else "wb") as f:
+                    while True:
+                        chunk = r.read(1 << 20)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        got += len(chunk)
+                        if progress and total:
+                            progress(int((i + got / total) * 100 / len(CUDA_WHEELS)), f"{pkg} {got >> 20}/{total >> 20}MB")
         with zipfile.ZipFile(tmp) as z:
             for name in z.namelist():
                 if name.lower().endswith(".dll") and "/bin/" in name:

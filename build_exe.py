@@ -71,6 +71,12 @@ try:
 except Exception:
     pass  # git 이 없으면 알림 없이
 
+# 나눠 줄 때 안내문 (11/11): zip 을 받은 사람이 제일 먼저 보게 exe 옆에. 메모장이 헷갈리지 않게 BOM 붙은 UTF-8.
+with open(os.path.join(HERE, "처음_읽어주세요.txt"), encoding="utf-8") as _f:
+    _guide = _f.read()
+with open(os.path.join(HERE, "dist", "VideoTranslator", "처음_읽어주세요.txt"), "w", encoding="utf-8-sig") as _f:
+    _f.write(_guide)
+
 # 버전별 zip: 지금 버전은 dist\VideoTranslator_v0.x.zip, 다른 버전은 dist\Archive\ 로 (같은 버전 다시 묶으면 덮어씀)
 from version import VERSION
 dist = os.path.join(HERE, "dist", "VideoTranslator")

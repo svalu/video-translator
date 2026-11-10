@@ -51,8 +51,13 @@ def gpu_info():
 
 
 class Setup:
-    def __init__(self, get_model):
+    SMALL_MODEL = "exaone3.5:2.4b"  # 그래픽 메모리가 작거나 NVIDIA 가 없는 PC 용 (약 1.6GB)
+    SIZE = {"exaone3.5:7.8b": "약 5GB", "exaone3.5:2.4b": "약 1.6GB"}
+
+    def __init__(self, get_model, set_model=None, get_ear=None):
         self.get_model = get_model          # 지금 설정된 번역 모델 이름을 돌려주는 함수
+        self.set_model = set_model          # 작은 모델로 바꿀 때 (다른 PC 에 줄 때, 11/11)
+        self.get_ear = get_ear or (lambda: "auto")
         self.job = {"kind": "", "status": "", "percent": 0, "error": ""}
         self._gpu = None
 
@@ -68,31 +73,46 @@ class Setup:
             have = [m["name"] for m in _get("/api/tags").get("models", [])]
         except Exception:
             pass
-        present = any(h == model or h == model + ":latest" for h in have)
         if self._gpu is None:
             self._gpu = gpu_info()
+        # 11/11: 그래픽 메모리가 작은 PC(6GB 미만·NVIDIA 없음)에 7.8B 를 받으면 5GB 받고도 문장당 5~10초.
+        # 아직 안 받았으면 처음부터 작은 모델(2.4B)로 바꿔 둔다. 이미 받아 둔 사람은 건드리지 않는다.
+        small = False
+        if self._gpu["tier"] == "slow" and self.set_model and model != self.SMALL_MODEL and not any(h.startswith(model) for h in have):
+            self.set_model(self.SMALL_MODEL)
+            model = self.SMALL_MODEL
+        if model == self.SMALL_MODEL and self._gpu["tier"] == "slow":
+            small = True
+        present = any(h == model or h == model + ":latest" for h in have)
         # 귀: 실시간 자막이 없으면(윈10) Whisper 가 대신 듣는다 (11/08). GPU 부품이 없으면 CPU 로라도 돈다.
         import whisper_ear
         nvidia = self._gpu["vram_gb"] > 0
         cuda = whisper_ear.cuda_ready()
         wmodel = whisper_ear.model_cached(whisper_ear.GPU_MODEL if cuda else whisper_ear.CPU_MODEL)
-        if cuda:
+        # 11/11: 실시간 자막이 있는 PC 는 Whisper 를 안 쓰는데도 'GPU 부품 받으라'가 노란 경고로 떠서 매번 받게 만들었다.
+        # → 실제로 Whisper 를 쓸 때(실시간 자막 없음, 또는 귀를 Whisper 로 고름)만 챙긴다.
+        need_whisper = (not captions) or self.get_ear() == "whisper"
+        if not need_whisper:
+            wdetail = "안 써요 · 실시간 자막이 없는 PC(윈도우 10)에서만 대신 들어요"
+        elif cuda:
             wdetail = "GPU 로 받아써요 · " + ("모델 받아 뒀어요" if wmodel else "처음 '읽기 시작' 때 모델을 받아요 (약 1.6GB)")
         elif nvidia:
-            wdetail = "GPU 부품이 없어서 지금은 CPU 로 (느려요). 받으면 빨라져요 (약 1.2GB)"
+            wdetail = "GPU 부품이 없어서 지금은 CPU 로 (느려요). 받으면 빨라져요 (약 1.2GB, 끊겨도 이어 받아요)"
         else:
             wdetail = "그래픽카드가 없어서 CPU 로 받아써요 (느려요)"
         items = [
             {"key": "captions", "label": "귀 · 윈도우 실시간 자막", "ok": captions, "warn": not captions,
              "detail": "있어요 (처음 켤 때 '영어(미국)' 음성 팩을 받으라고 하면 받아 주세요)" if captions
              else "이 PC엔 없어요 (윈도우 11 22H2+ 전용) → 아래 Whisper 가 대신 들어요"},
-            {"key": "whisper", "label": "귀 · Whisper (PC 소리 직접 받아쓰기)", "ok": cuda, "warn": not cuda,
-             "detail": wdetail, "action": "cuda" if (nvidia and not cuda) else None},
+            {"key": "whisper", "label": "귀 · Whisper (PC 소리 직접 받아쓰기)", "ok": cuda or not need_whisper,
+             "warn": need_whisper and not cuda, "skip": not need_whisper,
+             "detail": wdetail, "action": "cuda" if (need_whisper and nvidia and not cuda) else None},
             {"key": "ollama", "label": "Ollama (번역 엔진)", "ok": running,
              "detail": f"실행 중 · {version}" if running else ("설치돼 있는데 꺼져 있어요" if exe else "설치가 필요해요"),
              "action": None if running else ("start" if exe else "install")},
             {"key": "model", "label": f"번역 모델 · {model}", "ok": present,
-             "detail": "받아 뒀어요" if present else ("받기가 필요해요 (약 5GB)" if running else "Ollama 먼저"),
+             "detail": ("받아 뒀어요" if present else (f"받기가 필요해요 ({self.SIZE.get(model, '몇 GB')})" if running else "Ollama 먼저"))
+             + (" · 그래픽 메모리가 작아서 작은 모델로 골랐어요" if small else ""),
              "action": None if present or not running else "pull"},
             {"key": "gpu", "label": f"그래픽카드 · {self._gpu['name']}", "ok": self._gpu["tier"] != "slow",
              "warn": self._gpu["tier"] == "slow",

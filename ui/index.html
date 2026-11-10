@@ -106,6 +106,18 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
 .check .t { font-weight: 700; font-size: 13.5px; }
 .check .d { font-size: 12px; color: var(--ink-2); }
 .check .ok { color: var(--ok); } .check .no { color: #d93025; } .check .wa { color: var(--warn); }
+.check .sk { color: var(--ink-2); opacity: .5; }  /* 이 PC 에선 안 쓰는 것 (11/11) */
+.check.skip .t, .check.skip .d { color: var(--ink-2); }
+/* 11/11 준비 점검 카드 열릴 때 모션: 카드가 살짝 내려오고, 줄이 위에서부터 차례로 */
+.setup.enter { animation: setupIn .42s cubic-bezier(.2, .8, .2, 1) both; transform-origin: top center; }
+.setup.enter .check { animation: rowIn .45s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 60ms + 90ms); }
+@keyframes setupIn { from { opacity: 0; transform: translateY(-10px) scale(.985); } }
+@keyframes rowIn { from { opacity: 0; transform: translateY(8px); } }
+.check .pop { animation: pop .5s cubic-bezier(.3, 1.6, .5, 1) both; }  /* 빨강·노랑 → 초록으로 바뀌는 순간 */
+@keyframes pop { 0% { transform: scale(.4); opacity: 0; } 100% { transform: none; opacity: 1; } }
+#setupRe.spin svg { animation: spin .6s ease-in-out; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .setup.enter, .setup.enter .check, .check .pop, #setupRe.spin svg { animation: none; } }
 .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
 .btn.primary svg { width: 16px; height: 16px; }
 .bar { height: 6px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
@@ -373,6 +385,8 @@ function render(s) {
     }
     if (s.voices.some(v => v.id === s.settings.voice)) sel.value = s.settings.voice;
     $("source").value = s.settings.source;
+    const lm = (s.settings.local_model || "").replace(/^exaone3\.5:/i, "EXAONE ").toUpperCase();  // 11/11: 작은 모델(2.4B)로 바뀐 PC 도 맞게
+    $("source").options[0].textContent = `내 PC (${lm}) · 번역기 앱 필요 없음`;
     $("source").disabled = s.running;  // 읽는 중엔 못 바꿈 (멈추고 바꾸기)
     // 귀: 자동이면 지금 무엇을 쓰는지 보여 주고, 실시간 자막이 없는 PC(윈10)에선 그 선택지를 막는다
     const ear = $("ear");
@@ -406,15 +420,23 @@ async function poll() {
 setInterval(poll, 600); poll();
 
 // ---- 준비 점검 ----
-let setupOpen = false, setupTimer = null;
+let setupOpen = false, setupTimer = null, lastOk = {};
+function showSetup(open) {  // 열 때만 모션 (4초마다 다시 그릴 땐 안 움직이게)
+  setupOpen = open; const el = $("setup");
+  if (open && el.hidden) { el.hidden = false; el.classList.remove("enter"); void el.offsetWidth; el.classList.add("enter");
+    setTimeout(() => el.classList.remove("enter"), 1000); }
+  if (!open) el.hidden = true;
+}
 const ACT = { install: ["Ollama 설치", "/api/setup/install"], start: ["Ollama 켜기", "/api/setup/start"], pull: ["모델 받기", "/api/setup/pull"],
               cuda: ["GPU 부품 받기", "/api/setup/cuda"] };
 function renderSetup(c) {
   const box = $("checks"); box.innerHTML = "";
-  c.items.forEach(it => {
-    const row = document.createElement("div"); row.className = "check";
-    const mark = it.ok ? ["CheckmarkCircle02", "ok"] : it.warn ? ["Alert02", "wa"] : ["CancelCircle", "no"];
-    row.innerHTML = `<span class="${mark[1]}">${HI[mark[0]]}</span><div><div class="t"></div><div class="d"></div></div><span></span>`;
+  c.items.forEach((it, i) => {
+    const row = document.createElement("div"); row.className = "check" + (it.skip ? " skip" : ""); row.style.setProperty("--i", i);
+    const mark = it.skip ? ["CheckmarkCircle02", "sk"] : it.ok ? ["CheckmarkCircle02", "ok"] : it.warn ? ["Alert02", "wa"] : ["CancelCircle", "no"];
+    const pop = it.ok && !it.skip && lastOk[it.key] === false ? " pop" : "";
+    lastOk[it.key] = !!it.ok;
+    row.innerHTML = `<span class="${mark[1]}${pop}">${HI[mark[0]]}</span><div><div class="t"></div><div class="d"></div></div><span></span>`;
     row.querySelector(".t").textContent = it.label; row.querySelector(".d").textContent = it.detail;
     if (it.action && c.job.status !== "running") {
       const b = document.createElement("button"); b.className = "btn primary"; b.type = "button";
@@ -430,13 +452,13 @@ function renderSetup(c) {
   $("jobText").textContent = running ? `${{install: "Ollama 설치 중", start: "Ollama 켜는 중", pull: "모델 받는 중", cuda: "GPU 부품 받는 중"}[j.kind] || ""} · ${j.percent || 0}%`
     : (j.status === "error" ? "안 됐어요: " + j.error : "");
   $("setupHint").textContent = c.ready ? "준비 끝. 영상을 틀고 '읽기 시작'을 누르세요." : "빨간 줄을 위에서부터 채워 주세요.";
-  if (!c.ready || running) { $("setup").hidden = false; setupOpen = true; }
+  if (!c.ready || running) showSetup(true);
   clearTimeout(setupTimer);
   if (running || (setupOpen && !c.ready)) setupTimer = setTimeout(checkSetup, running ? 1000 : 4000);
 }
 async function checkSetup() { try { renderSetup(await api("/api/setup")); } catch (e) {} }
-$("setupBtn").addEventListener("click", () => { setupOpen = !setupOpen; $("setup").hidden = !setupOpen; if (setupOpen) checkSetup(); });
-$("setupRe").addEventListener("click", checkSetup);
+$("setupBtn").addEventListener("click", () => { showSetup(!setupOpen); if (setupOpen) checkSetup(); });
+$("setupRe").addEventListener("click", () => { const b = $("setupRe"); b.classList.remove("spin"); void b.offsetWidth; b.classList.add("spin"); checkSetup(); });
 checkSetup();  // 처음 켤 때 한 번: 모자란 게 있으면 카드가 열린다
 
 function sendSettings() {
