@@ -433,6 +433,10 @@ class Reader:
                     time.sleep(1)
                     box = find_caption_box(launch=True)
                     if box is not None:
+                        try:
+                            hide_caption_window()  # 11/10: 다시 켜진 실시간 자막 창이 화면에 그대로 떠 있던 것
+                        except Exception:
+                            pass
                         self.status = "듣는 중 · 내 PC 번역"
                 time.sleep(0.3)
 
