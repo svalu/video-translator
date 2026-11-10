@@ -414,7 +414,7 @@ class Reader:
                         next_dev_check = now + 5
                         dev = _default_output_name()
                         if dev and out_dev and dev != out_dev:
-                            self.status = f"소리 장치가 바뀌어서 실시간 자막 다시 켜는 중 ({dev})"
+                            self.status = f"실시간 자막 다시 켜는 중 · 소리 장치가 {dev}(으)로 바뀜"
                             restart_live_captions()
                             box = None
                             while not self._stop.is_set() and box is None:

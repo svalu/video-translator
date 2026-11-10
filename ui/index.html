@@ -48,10 +48,11 @@ h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 .state.on .dot::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--ok); opacity: 0; animation: ring 1.8s ease-out infinite; }
 @keyframes ring { 0% { transform: scale(.5); opacity: .55; } 100% { transform: scale(1.4); opacity: 0; } }
 .state.warn .dot { background: var(--warn); }
-.state b { flex: none; font-weight: 700; }
+.state b { flex: 0 1 auto; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }  /* 긴 안내가 카드 밖으로 삐져나가던 것 (11/10) */
 .state span { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .state.warn { align-items: flex-start; }
 .state.warn .dot { margin-top: 6px; }
+.state.warn b { white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
 .state.warn span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }  /* 문제 안내는 자르지 않고 두 줄까지 */
 .go { width: 100%; height: 52px; border: 0; border-radius: 16px; font: 700 16px var(--font); cursor: pointer; background: var(--blue); color: #fff;
       transition: background-color .15s, color .15s, transform .1s; }
