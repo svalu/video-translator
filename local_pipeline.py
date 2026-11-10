@@ -39,11 +39,19 @@ def find_caption_box(launch=False):
     if not win.Exists(1, 0.5):
         if not launch:
             return None
+        # 11/10: 오래 두면 실시간 자막이 '응답 없음' 상태로 보이지 않는 창만 남아 있었다 (IsHungAppWindow).
+        # 프로세스가 살아 있으니 다시 켜도(Popen) 새 창이 안 뜬다 → 멈춘 걸 끄고 새로 켠다.
+        import ctypes
+        u32 = ctypes.windll.user32
+        hw = u32.FindWindowW("LiveCaptionsDesktopWindow", None)
+        if hw and (u32.IsHungAppWindow(hw) or (not u32.IsWindowVisible(hw) and not u32.IsIconic(hw))):
+            subprocess.run(["taskkill", "/im", "LiveCaptions.exe", "/f"], capture_output=True, creationflags=0x08000000)
+            time.sleep(1.5)
         try:
             subprocess.Popen(["LiveCaptions.exe"])  # 윈도우 기본 프로그램 (Win+Ctrl+L 과 같음)
         except OSError:
             return None
-        if not win.Exists(6, 0.5):
+        if not win.Exists(15, 0.5):  # 새로 켜면 창이 뜨기까지 6초 넘게 걸리기도 한다 (11/10)
             return None
     box = win.Control(AutomationId="CaptionsTextBlock")
     return box if box.Exists(3, 0.5) else None
