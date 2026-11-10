@@ -1,7 +1,7 @@
 """화면 번역: 단축키(Ctrl+Shift+T)를 누르면 지금 보고 있는 창의 영어 글자를 읽어서
 같은 자리에 한국어를 덮어씌운다. 다시 누르거나 화면이 바뀌면 걷어 낸다.
 
-  캡처(맨 앞 창) → 윈도우 OCR(screen_ocr) → 줄을 문단으로 묶기 → EXAONE 한 번에 번역 → 덮개 창에 그리기
+  캡처(맨 앞 창) → 윈도우 OCR(screen_ocr) → 줄을 문단으로 묶기 → 구글 번역 한 번에(막히면 EXAONE) → 덮개 창에 그리기
   덮개 창: 항상 맨 위, 클릭은 아래로 통과, 화면 캡처에서 빠짐(WDA_EXCLUDEFROMCAPTURE) — 자기 한국어를 다시 읽지 않게.
 
 앱(app.py --screen)이 켤 때 같이 띄운다. 앱이 꺼지면 같이 꺼진다.
@@ -168,10 +168,47 @@ def tidy(src, ko):
     return ko
 
 
+# 11/10: 슬라이드 글은 이미 다 있는 글이라 한 번에 보내면 된다 → 구글 번역(크롬 번역과 같은 엔진) 무료 주소.
+# EXAONE 은 한 장(20칸)에 20~28초, 구글은 1초 안팎. 공식 API 가 아니라 막힐 수 있다 → 실패하면 EXAONE 으로.
+# 슬라이드 글자는 구글로 나간다 (희랑이 11/10 이 방식을 골랐다). 말 번역(동시통역)은 계속 EXAONE.
+GOOGLE = "https://translate.googleapis.com/translate_a/t?client=gtx&sl=en&tl=ko&format=text"
+# 구글이 제품 이름까지 한국어로 옮길 때 되돌린다 (Copilot → '부조종사' 를 실제로 들었다)
+_FIX = {"부조종사": "Copilot", "젠데스크": "Zendesk", "젠 데스크": "Zendesk"}
+
+
+def _google(chunk):
+    import urllib.parse
+    body = urllib.parse.urlencode([("q", t) for t in chunk]).encode()
+    req = urllib.request.Request(GOOGLE, body, {"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        out = json.load(r)
+    if not isinstance(out, list) or len(out) != len(chunk):
+        raise ValueError("구글 번역 답 모양이 다름")
+    got = {}
+    for n, (src, ko) in enumerate(zip(chunk, out), 1):
+        ko = ko[0] if isinstance(ko, list) else ko  # 언어 자동 감지일 땐 [번역, 언어] 로 온다
+        for a, b in _FIX.items():
+            ko = ko.replace(a, b)
+        ko = tidy(src, ko)
+        if ko:
+            got[n] = ko
+    return got
+
+
 def translate_blocks(texts, model, size=14, on_progress=None, context=None):
     """11/08: EXAONE 이 여러 블록을 받으면 2번을 1번 아래 들여쓰기로 붙이고 번호를 빼먹어서 빈칸이 됐다.
     → 짝이 안 맞은 블록만 하나씩 다시 묻는다. 빈 번역은 캐시에 안 넣는다(다음에 누르면 다시 시도)."""
     todo = [t for t in dict.fromkeys(texts) if t not in _cache]
+    try:
+        for i in range(0, len(todo), 40):
+            chunk = todo[i:i + 40]
+            for n, ko in _google(chunk).items():
+                _cache[chunk[n - 1]] = ko
+        if on_progress:
+            on_progress()
+        todo = [t for t in todo if t not in _cache]  # 구글이 빈칸으로 돌려준 것만 EXAONE 으로
+    except Exception:
+        pass  # 구글이 막히면 아래 EXAONE 으로 전부
     for i in range(0, len(todo), size):  # 너무 길면 나눠서
         chunk = todo[i:i + size]
         got = _ask(chunk, model, context)
