@@ -269,6 +269,20 @@ def strip_notes(ko):
     return ko.strip()
 
 
+# 실시간 자막이 자주 잘못 알아듣는 고유명사 — 모델한테 부탁해도 무시해서(11/11 E12) 번역 전에 영어에서 바꾼다
+_CAPTION_FIX = [
+    (re.compile(r"\bE-?12(?=\b|zendesk|\.)", re.I), "Eatwell"),   # Eatwell(데모용 가상 음식 배달 회사)을 E12 로
+    (re.compile(r"\bEat well\b", re.I), "Eatwell"),
+    (re.compile(r"\bZenda? ?Desk\b", re.I), "Zendesk"),
+]
+
+
+def fix_caption(en):
+    for pat, rep in _CAPTION_FIX:
+        en = pat.sub(rep, en)
+    return en
+
+
 class LocalTranslator:
     """Ollama 로 번역. 앞 문장 2개를 맥락으로 준다."""
 
@@ -316,6 +330,7 @@ class LocalTranslator:
             pass
 
     def translate(self, en):
+        en = fix_caption(en)
         user = ""
         if self.ctx:
             user += "앞 문장(참고만):\n" + "\n".join(self.ctx[-2:]) + "\n\n"
