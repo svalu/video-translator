@@ -368,6 +368,7 @@ function render(s) {
   } else {
     $("spk").textContent = "";
     if (s.running && s.current.ko) $("nowKo").textContent = s.current.ko;
+    if (!s.running) $("nowKo").textContent = "영상을 켜고 '읽기 시작'을 눌러.";  // 11/11: 멈추면 마지막 문장을 지운다
   }
   $("nowEn").textContent = s.running ? (s.current.en || "") : "";
   $("sSpoken").textContent = s.stats.spoken;

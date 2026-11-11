@@ -236,7 +236,8 @@ class Overlay:
             self.last_ok = time.time()
             st = s.get("settings", {})
             self.apply(st)
-            want = bool(st.get("overlay_on", True))
+            # 11/11: 읽기를 멈추면 '읽기를 멈췄어' 자막 줄이 화면에 남아 있었다 → 읽는 동안만 보인다
+            want = bool(st.get("overlay_on", True)) and bool(s.get("running"))
             if want != self.shown:
                 self.shown = want
                 for wnd in (self.bgwin, self.top):

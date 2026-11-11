@@ -223,6 +223,7 @@ class Reader:
             self.running = False
             self._stop.set()
             self.status = "멈춤"
+            self.current = {"en": "", "ko": ""}  # 11/11: 멈추면 '지금 읽는 문장'도 비운다
             while not self._q.empty():
                 self._q.get_nowait()
             if self._log_file:
@@ -381,8 +382,8 @@ class Reader:
             return self._whisper_listen(jobs)
         with auto.UIAutomationInitializerInThread():
             box = self._find_box_hard()
-            if box is None:
-                return
+            if box is None or self._stop.is_set():
+                return  # 11/11: 모델 올리는 중에 멈추면 '듣는 중'으로 덮어쓰던 것
             self.status = f"듣는 중 · 내 PC 번역"
             try:
                 hide_caption_window()  # 한국어 자막 줄이 대신 보여 주니까 회색 영어 창은 숨긴다
