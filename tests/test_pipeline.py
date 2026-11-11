@@ -95,6 +95,28 @@ class SegmenterTest(unittest.TestCase):
             self.s.speak(x)
         self.assertTrue(all(v < 12 for v in self.s.lat), self.s.lat)
 
+    def test_revised_caption_does_not_flood_old_sentences(self):
+        """자막이 마지막으로 읽은 문장을 고쳐 써도 옛 문장을 뭉치로 다시 내보내지 않는다 (v0.5.2: 지연 100초·세 번씩 읽음)."""
+        self.s.seg.prime(self.s.text())
+        for x in (A, B, C, D):
+            self.s.speak(x)
+        self.s.feed(30)                                   # 20초 넘게 지남
+        self.s.box[-1] = "People can then reply with text, pictures and more."  # D 를 전혀 다르게 고쳐 씀
+        self.s.speak("Now let us look at the next topic together.")
+        for x in (A, B, C):
+            self.assertEqual(self.s.out.count(x), 1, self.s.out)
+        self.assertEqual(self.s.out[-1], "Now let us look at the next topic together.")
+        self.assertLessEqual(len(self.s.out), 6)
+
+    def test_box_replaced_starts_fresh_without_flood(self):
+        self.s.seg.prime(self.s.text())
+        for x in (A, B):
+            self.s.speak(x)
+        self.s.box[:] = ["Old one here now.", "Old two is here.", "Old three sits here.", "Old four stays here."]
+        self.s.feed(5)
+        self.s.speak(C)
+        self.assertEqual(self.s.out, [A, B, C])
+
     def test_one_word_junk_is_dropped(self):
         """자막이 고쳐 쓰다 남긴 한 단어는 다음 문장 앞에 붙이지 않는다 (v0.5.1)."""
         self.s.seg.prime(self.s.text())

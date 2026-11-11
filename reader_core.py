@@ -41,7 +41,7 @@ DEFAULTS = {
     "overlay_en": True,          # 영어 원문 같이 보이기
 }
 LAG_OK = 6.0
-MAX_BACKLOG = 2
+MAX_BACKLOG = 12  # 11/11 희랑: "캐치한 텍스트는 다 읽게" — 2 → 12 (사실상 안 건너뜀. 12문장 넘게 쌓일 때만 자막으로 돌림)
 
 
 def captions_available():

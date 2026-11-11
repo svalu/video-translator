@@ -233,11 +233,22 @@ class CaptionSegmenter:
         out = []
         alive = set()
         start = None
-        if self.last_key:
+        # 기준 찾기: 마지막으로 읽은 문장 → 못 찾으면(자막이 그 문장을 고쳐 썼을 때) 그 앞에 읽은 문장들 차례로.
+        # 11/11: 예전엔 못 찾으면 '20초 넘게 지난 문장은 안 읽은 것'으로 쳐서, 칸에 남아 있던 옛 문장 10여 개를 뭉치로 다시 내보냈다
+        # (지연 75~120초, 같은 문장을 세 번씩 → 목소리가 밀려 계속 건너뜀).
+        for anchor in [self.last_key] + [e[0] for e in reversed(self.emitted[-8:])]:
+            if not anchor:
+                continue
             for j in range(len(keys) - 1, -1, -1):  # 끝에서부터: 같은 문장이 두 번 보이면 나중 것이 기준
-                if keys[j] and self._same(keys[j], self.last_key):
+                if keys[j] and self._same(keys[j], anchor):
                     start = j + 1
                     break
+            if start is not None:
+                break
+        if start is None and self.emitted and len(keys) > 3:
+            # 읽은 문장이 칸에 하나도 안 보인다 (칸이 통째로 바뀜) → 옛 문장을 쏟아 내지 말고 지금부터 다시 시작
+            self.prime(text)
+            start = len(keys) if flat.endswith((".", "?", "!")) else len(keys) - 1
         if start is not None:  # 기준 뒤 새 문장 수에 맞춰 '처음 나타난 시각'을 늘리거나 줄인다
             n_new = len(sents) - start
             self.new_born = (self.new_born + [now] * n_new)[:n_new]
@@ -252,11 +263,8 @@ class CaptionSegmenter:
             b[1] = now
             if not key:
                 continue
-            if start is not None:
-                if i < start:
-                    continue           # 기준 문장까지는 이미 읽음
-            elif self._done(key, now):
-                continue
+            if start is not None and i < start:
+                continue               # 기준 문장까지는 이미 읽음
             last = i == len(sents) - 1
             age = now - self.seen[x]
             ok = (x.endswith((".", "?", "!")) and age >= self.LAST_STABLE) if last else age >= self.STABLE
