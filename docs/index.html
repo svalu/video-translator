@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>동영상 동시 통역기 · 다운로드</title>
+  <meta name="description" content="영어 강의 영상을 한국어 자막과 목소리로. 슬라이드 영어도 단축키 한 번에 한국어로 덮어 줍니다. Windows 버전 내려받기." />
+  <meta property="og:title" content="동영상 동시 통역기" />
+  <meta property="og:description" content="영어 강의 영상을 한국어 자막과 목소리로. 슬라이드 영어는 Ctrl+Shift+T 한 번에 한국어로." />
+  <meta name="theme-color" content="#111318" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Crect width='1024' height='1024' rx='224' fill='%23111318'/%3E%3Crect x='150' y='170' width='460' height='390' rx='110' fill='%23fff'/%3E%3Cpath d='M191 550H311L211 655z' fill='%23fff'/%3E%3Crect x='414' y='414' width='460' height='390' rx='110' fill='%231f6bff'/%3E%3Cpath d='M713 794H833L813 899z' fill='%231f6bff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <style>
+    :root {
+      --bg: #f4f5f7; --paper: #ffffff; --ink: #111318; --sub: #4a505c; --muted: #7c8290; --line: #e2e4ea;
+      --blue: #1f6bff; --blue-soft: #e6eeff; --lime: #c8f56a; --lime-ink: #3f5c00; --lime-soft: #f1fbdc;
+      --btn: #111318; --btn-ink: #fff; --shadow: 0 18px 50px rgba(17, 19, 24, .10);
+      --screen: #1b1e25; --slide: #f7f8fa;
+    }
+    @media (prefers-color-scheme: dark) { :root {
+      --bg: #0e1015; --paper: #171a21; --ink: #eef0f4; --sub: #b9bfcb; --muted: #8a919e; --line: #262a33;
+      --blue: #5b93ff; --blue-soft: #18233a; --lime: #c8f56a; --lime-ink: #c8f56a; --lime-soft: #1f2a12;
+      --btn: #c8f56a; --btn-ink: #111318; --shadow: 0 18px 50px rgba(0, 0, 0, .4);
+      --screen: #0a0b0f; --slide: #e9ecf1;
+    } }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif; line-height: 1.6; -webkit-font-smoothing: antialiased; word-break: keep-all; }
+    a { color: inherit; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+    header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+    header .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+    .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo b { display: block; font-size: 18px; letter-spacing: -.01em; }
+    .logo small { display: block; font-size: 10.5px; letter-spacing: .14em; color: var(--muted); margin-top: -2px; }
+    nav { display: flex; gap: 22px; font-size: 14px; font-weight: 600; }
+    nav a { text-decoration: none; color: var(--sub); white-space: nowrap; } nav a:hover { color: var(--ink); }
+
+    .hero { display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center; padding: 64px 0 56px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--blue); }
+    .eyebrow::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 2px var(--ink); }
+    h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.18; letter-spacing: -.035em; margin: 18px 0; font-weight: 800; }
+    h1 em { font-style: normal; color: var(--blue); }
+    .lead { font-size: 17px; color: var(--sub); margin: 0 0 30px; max-width: 30em; }
+    .ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 10px; padding: 15px 24px; border-radius: 12px; font-weight: 700; font-size: 16px; text-decoration: none; transition: transform .15s, filter .15s, border-color .15s, color .15s; }
+    .btn.primary { background: var(--btn); color: var(--btn-ink); box-shadow: 0 10px 24px rgba(17, 19, 24, .22); }
+    .btn.primary:hover { transform: translateY(-1px); filter: brightness(1.12); }
+    .btn.ghost { border: 1.5px solid var(--line); color: var(--ink); background: var(--paper); }
+    .btn.ghost:hover { border-color: var(--blue); color: var(--blue); }
+    .meta { margin-top: 22px; font-size: 13px; color: var(--muted); }
+    .meta .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--sub); font-weight: 600; }
+    .meta .facts span + span::before { content: '·'; margin-right: 14px; color: var(--line); }
+    .meta p { margin: 6px 0 0; }
+    .copy-link { border: 0; background: none; padding: 0; font: inherit; color: var(--sub); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+    .stage { background: var(--paper); border: 1px solid var(--line); border-radius: 28px; padding: 18px; box-shadow: var(--shadow); }
+    .stage svg { display: block; width: 100%; height: auto; }
+    .stage svg text { font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', sans-serif; }
+
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .feature { display: flex; gap: 14px; padding: 26px 8px; }
+    .feature + .feature { border-left: 1px solid var(--line); padding-left: 24px; }
+    .feature .no { font-size: 12px; font-weight: 800; color: var(--blue); padding-top: 3px; }
+    .feature b { display: block; font-size: 16px; }
+    .feature span { font-size: 13.5px; color: var(--muted); }
+
+    section.block { padding: 72px 0 0; }
+    .kicker { font-size: 13px; font-weight: 700; color: var(--blue); }
+    h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -.03em; margin: 8px 0; line-height: 1.25; }
+    .sub { color: var(--sub); margin: 0 0 26px; }
+
+    .guides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    .guide { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+    .guide summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 14px; padding: 22px; }
+    .guide summary::-webkit-details-marker { display: none; }
+    .guide .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; }
+    .guide .ic.new { background: var(--blue-soft); color: var(--blue); } .guide .ic.up { background: var(--lime-soft); color: var(--lime-ink); }
+    .guide small { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
+    .guide b { display: block; font-size: 17px; }
+    .guide .chev { margin-left: auto; color: var(--muted); transition: transform .2s; }
+    .guide[open] .chev { transform: rotate(90deg); }
+    .guide ol { margin: 0; padding: 0 22px 22px; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 12px; }
+    .guide li { counter-increment: s; display: grid; grid-template-columns: 28px 1fr; gap: 10px; font-size: 14.5px; color: var(--sub); }
+    .guide li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 800; display: grid; place-items: center; margin-top: 1px; }
+    .guide li b { display: inline; font-size: inherit; color: var(--ink); }
+
+    .needs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+    .need { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
+    .need .t { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15.5px; }
+    .need .t i { font-style: normal; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 2px 9px; background: var(--blue-soft); color: var(--blue); }
+    .need .t i.opt { background: var(--lime-soft); color: var(--lime-ink); }
+    .need p { margin: 6px 0 0; font-size: 13.5px; color: var(--sub); }
+    .note { margin-top: 14px; font-size: 13px; color: var(--muted); }
+    kbd { font-family: inherit; font-size: 12px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 0 6px; background: var(--paper); color: var(--ink); }
+
+    .release { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 24px 26px; }
+    .release-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .release-head b { font-size: 20px; } .release-head span { color: var(--muted); font-size: 13px; }
+    .release-head a { margin-left: auto; font-size: 13.5px; font-weight: 600; color: var(--blue); text-decoration: none; }
+    .release ul { margin: 14px 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .release li { position: relative; padding-left: 18px; color: var(--sub); font-size: 14.5px; }
+    .release li::before { content: ''; position: absolute; left: 0; top: .62em; width: 7px; height: 7px; border-radius: 2px; background: var(--blue); }
+    .release li b { color: var(--ink); }
+
+    .faq { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+    .faq details { border-bottom: 1px solid var(--line); }
+    .faq summary { list-style: none; cursor: pointer; padding: 18px 4px; font-weight: 700; font-size: 16px; display: flex; justify-content: space-between; gap: 12px; }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary::after { content: '+'; color: var(--muted); font-weight: 400; font-size: 22px; line-height: 1; }
+    .faq details[open] summary::after { content: '−'; }
+    .faq .a { padding: 0 4px 20px; color: var(--sub); font-size: 14.5px; }
+    .faq .a p { margin: 0 0 8px; }
+
+    .final { margin: 80px 0 0; padding: 56px 24px; text-align: center; background: #111318; color: #fff; border-radius: 28px; }
+    @media (prefers-color-scheme: dark) { .final { background: #1a2336; } }
+    .final h2 { color: inherit; margin-bottom: 22px; }
+    .final .btn.primary { background: var(--lime); color: #111318; }
+    footer { padding: 40px 0 48px; display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; text-align: center; }
+    footer .maker { display: flex; align-items: center; gap: 8px; color: var(--sub); font-weight: 600; }
+
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; padding: 40px 0; gap: 32px; }
+      .features, .needs { grid-template-columns: 1fr; }
+      .feature + .feature { border-left: 0; border-top: 1px solid var(--line); padding-left: 8px; }
+      .guides { grid-template-columns: 1fr; }
+      nav a.opt { display: none; }
+    }
+    @media (max-width: 520px) { .wrap { padding: 0 16px; } nav { gap: 14px; font-size: 13px; } .logo small { display: none; } .btn { width: 100%; justify-content: center; } }
+    @media (max-width: 380px) { nav a[href="#faq"] { display: none; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn, .guide .chev { transition: none; } }
+    svg.hi { display: inline-block; vertical-align: -0.2em; flex: none; }
+    .chev svg.hi { display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="logo" href="#top" aria-label="동영상 동시 통역기">
+        <svg width="36" height="36" viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" rx="224" fill="#111318"/><rect x="150" y="170" width="460" height="390" rx="110" fill="#fff"/><path d="M191 550H311L211 655z" fill="#fff"/><rect x="380" y="380" width="528" height="458" rx="144" fill="#111318"/><rect x="414" y="414" width="460" height="390" rx="110" fill="#1f6bff"/><path d="M713 794H833L813 899z" fill="#1f6bff"/><text x="325" y="470" font-family="Segoe UI,Arial,sans-serif" font-weight="700" font-size="300" text-anchor="middle" fill="#111318">A</text><text x="644" y="700" font-family="Malgun Gothic,Pretendard,sans-serif" font-weight="700" font-size="270" text-anchor="middle" fill="#fff">가</text></svg>
+        <span><b>동영상 동시 통역기</b><small>LIVE VIDEO INTERPRETER</small></span>
+      </a>
+      <nav>
+        <a href="#install">설치·업데이트</a>
+        <a href="#faq">자주 묻는 질문</a>
+        <a class="opt" href="https://github.com/svalu/video-translator/releases" target="_blank" rel="noopener">배포 기록 <svg class="hi" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6.65C9 6.65 15.94 6.11 16.92 7.08C17.89 8.06 17.35 15 17.35 15M16.5 7.5L6.5 17.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg></a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap" id="top">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">영어 강의 영상을 한국어로</span>
+        <h1>영어 강의,<br /><em>한국어</em>로 들으세요.</h1>
+        <p class="lead">영상 속 영어를 실시간으로 한국어 자막과 목소리로 옮겨 줍니다. 슬라이드에 적힌 영어는 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> 한 번이면 같은 자리에 한국어로 덮어 줘요.</p>
+        <div class="ctas">
+          <a class="btn primary" id="dl" href="https://github.com/svalu/video-translator/releases/latest/download/VideoTranslator_Windows.zip">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+            Windows 버전 다운로드
+          </a>
+          <a class="btn ghost" href="#install">처음 쓰는 법</a>
+        </div>
+        <div class="meta">
+          <div class="facts" id="facts"><span>최신 버전</span><span>zip · 설치 없음</span><span>Windows 10/11</span></div>
+          <p id="checked">GitHub 에서 최신 버전을 확인하고 있어요…</p>
+          <p>이 페이지 주소는 <button class="copy-link" id="copy">링크 복사</button>로 전할 수 있어요.</p>
+        </div>
+      </div>
+
+      <div class="stage" role="img" aria-label="영상 위에 한국어 자막 줄이 뜨고, 슬라이드의 영어 제목이 한국어로 덮인 모습">
+        <svg viewBox="0 0 560 380" aria-hidden="true">
+          <!-- 영상 화면 -->
+          <rect x="0" y="0" width="560" height="380" rx="16" fill="var(--screen)"/>
+          <rect x="22" y="22" width="516" height="258" rx="8" fill="var(--slide)"/>
+          <!-- 슬라이드: 위는 원래 영어, 아래는 한국어로 덮인 칸 -->
+          <text x="44" y="64" font-size="13" font-weight="700" fill="#7c8290">BEFORE</text>
+          <text x="44" y="92" font-size="21" font-weight="800" fill="#111318">Views: Best practices</text>
+          <text x="44" y="116" font-size="13.5" fill="#4a505c">Consult your agents first before changing shared views.</text>
+          <rect x="34" y="138" width="492" height="84" rx="8" fill="#fff" stroke="#1f6bff" stroke-width="2"/>
+          <text x="48" y="160" font-size="12" font-weight="700" fill="#1f6bff">Ctrl+Shift+T · 1초</text>
+          <text x="48" y="188" font-size="21" font-weight="800" fill="#111318">보기: 모범 사례</text>
+          <text x="48" y="210" font-size="13.5" fill="#4a505c">공유 보기를 변경하기 전에 먼저 상담원에게 문의하세요.</text>
+          <!-- 강사 얼굴 -->
+          <circle cx="490" cy="246" r="24" fill="#d9dde5"/><circle cx="490" cy="240" r="9" fill="#b6bcc8"/><path d="M474 262c5-9 27-9 32 0" fill="#b6bcc8"/>
+          <!-- 재생 막대 -->
+          <rect x="22" y="292" width="516" height="4" rx="2" fill="#3a3f4a"/><rect x="22" y="292" width="210" height="4" rx="2" fill="var(--lime)"/>
+          <!-- 한국어 자막 줄 -->
+          <rect x="60" y="310" width="440" height="56" rx="14" fill="#000" fill-opacity=".78"/>
+          <text x="280" y="334" font-size="16" font-weight="700" text-anchor="middle" fill="#fff">공유 보기는 상담원과 먼저 상의하세요</text>
+          <text x="280" y="354" font-size="11.5" text-anchor="middle" fill="#c9ced8">Consult your agents first before changing shared views.</text>
+          <!-- 목소리 -->
+          <g transform="translate(478 316)"><circle cx="0" cy="0" r="0" fill="none"/></g>
+        </svg>
+      </div>
+    </section>
+
+    <section class="features" aria-label="특징">
+      <div class="feature"><span class="no">01</span><div><b>말 번역 · 동시통역</b><span>강사의 말을 한국어 자막 줄과 목소리로</span></div></div>
+      <div class="feature"><span class="no">02</span><div><b>화면 번역 · 1초</b><span>슬라이드 영어를 같은 자리에 한국어로 덮기</span></div></div>
+      <div class="feature"><span class="no">03</span><div><b>내 PC 에서, 무료</b><span>말 번역은 내 PC 의 AI 가. 유료 구독 없음</span></div></div>
+    </section>
+
+    <section class="block" id="install">
+      <div class="kicker">시작은 가볍게</div>
+      <h2>처음이어도, 다시 와도.</h2>
+      <p class="sub">지금 필요한 안내만 펼쳐 보세요.</p>
+      <div class="guides">
+        <details class="guide" open>
+          <summary><span class="ic new"><svg class="hi" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg></span><span><small>처음 써 보는 분</small><b>처음 설치하기</b></span><span class="chev"><svg class="hi" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6c0 0 6 4.42 6 6s-6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg></span></summary>
+          <ol>
+            <li><span>위의 <b>Windows 버전 다운로드</b>를 눌러 zip 을 받아요.</span></li>
+            <li><span>원하는 폴더에 <b>압축 풀기</b> 해요. 설치는 없어요. (zip 안에서 바로 누르지 마세요)</span></li>
+            <li><span><b>VideoTranslator.exe</b> 를 더블클릭해요. "Windows의 PC 보호" 창이 뜨면 <b>추가 정보 → 실행</b>.</span></li>
+            <li><span>처음 켜면 <b>준비 점검</b> 카드가 열려요. 빨간 줄 옆 버튼을 위에서부터 누르면 번역 엔진(Ollama)과 번역 모델까지 알아서 받아요.</span></li>
+            <li><span>영상을 틀고 <b>읽기 시작</b>. 슬라이드가 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>.</span></li>
+          </ol>
+        </details>
+        <details class="guide">
+          <summary><span class="ic up"><svg class="hi" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20.49 15A9 9 0 1 1 20.29 8.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/><path d="M15 9h3c1.41 0 2.12 0 2.56-.44C21 8.12 21 7.41 21 6V3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg></span><span><small>이미 쓰고 있는 분</small><b>새 버전으로 업데이트</b></span><span class="chev"><svg class="hi" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6c0 0 6 4.42 6 6s-6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg></span></summary>
+          <ol>
+            <li><span>앱을 끄고, 새 zip 을 받아 <b>원래 폴더에 덮어쓰기</b> 해요.</span></li>
+            <li><span>설정·받아 둔 모델은 다른 곳(<b>%LOCALAPPDATA%\VideoTranslator</b>, Ollama)에 있어서 그대로 남아요.</span></li>
+            <li><span>아래 <b>이번 버전의 변화</b>에서 무엇이 바뀌었는지 볼 수 있어요.</span></li>
+          </ol>
+        </details>
+      </div>
+
+      <div class="needs">
+        <div class="need"><div class="t">Windows 10 / 11 <i>필수</i></div><p>윈도우 11 은 '실시간 자막'으로 듣고, 윈도우 10 은 Whisper 가 PC 소리를 직접 받아써요.</p></div>
+        <div class="need"><div class="t">디스크 약 8GB <i>필수</i></div><p>번역 엔진(Ollama)과 번역 모델을 처음에 한 번 받아요. 인터넷이 필요해요.</p></div>
+        <div class="need"><div class="t">NVIDIA 그래픽카드 <i class="opt">있으면 빨라요</i></div><p>6GB 이상이면 문장당 1~2초. 작거나 없으면 작은 모델로 자동으로 바꿔서 돌아가요.</p></div>
+      </div>
+      <p class="note">회사 백신이 "머신러닝" 판정으로 EXE 를 격리할 수 있어요. 서명 없는 새 실행 파일에 흔한 추정 판정이에요. 회사 PC 라면 IT 에 허용을 요청해 주세요. 소스는 공개라 무엇을 하는지 볼 수 있어요.</p>
+    </section>
+
+    <section class="block" id="release">
+      <div class="kicker">조금씩 더 편하게</div>
+      <h2>이번 버전의 변화</h2>
+      <p class="sub">GitHub 에 올라간 최신 버전의 변경 내용이에요.</p>
+      <div class="release">
+        <div class="release-head"><b id="rel-ver">최신 버전</b><span id="rel-date"></span><a href="https://github.com/svalu/video-translator/releases" target="_blank" rel="noopener">전체 배포 기록 <svg class="hi" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6.65C9 6.65 15.94 6.11 16.92 7.08C17.89 8.06 17.35 15 17.35 15M16.5 7.5L6.5 17.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg></a></div>
+        <ul id="rel-notes"><li>불러오는 중…</li></ul>
+      </div>
+    </section>
+
+    <section class="block" id="faq">
+      <div class="kicker">잠깐 막혔나요?</div>
+      <h2>자주 묻는 질문</h2>
+      <p class="sub">여기서 먼저 확인해 보세요.</p>
+      <div class="faq">
+        <details><summary>돈이 드나요?</summary><div class="a"><p>아니요. 앱·번역 엔진(Ollama)·번역 모델·목소리 모두 무료예요. 유료 번역 서비스나 구독을 쓰지 않아요.</p></div></details>
+        <details><summary>영상이나 내 화면이 어디로 보내지나요?</summary><div class="a"><p><b>말 번역</b>은 내 PC 안에서만 해요. 영어 문장이 밖으로 나가지 않아요.</p><p><b>화면 번역</b>은 빠르게 하려고 슬라이드에서 읽은 영어 글자만 구글 번역으로 보내요. 화면 사진은 보내지 않아요. 구글이 안 되면 내 PC 모델로 대신해요.</p><p><b>목소리</b>는 Microsoft Edge 목소리(인터넷)를 쓰고, 안 되면 윈도우 기본 목소리로 읽어요.</p></div></details>
+        <details><summary>"Windows의 PC 보호" 창이 떠요.</summary><div class="a"><p>처음 받은 프로그램이라 Windows 가 한 번 확인하는 화면이에요. <b>추가 정보</b>를 누르면 나오는 <b>실행</b>을 누르세요.</p></div></details>
+        <details><summary>'실시간 자막'이 영어(미국) 음성 팩을 받으라고 해요.</summary><div class="a"><p>윈도우 11 의 실시간 자막을 처음 켤 때 한 번 나오는 안내예요. 받아 주세요. 그 뒤로는 앱이 알아서 켜고 숨겨요.</p></div></details>
+        <details><summary>그래픽카드가 없어도 되나요?</summary><div class="a"><p>돼요. 준비 점검이 그래픽 메모리가 작거나 없으면 작은 번역 모델(EXAONE 2.4B, 약 1.6GB)을 골라요. 대신 문장당 몇 초 더 걸려서, 동시통역보다는 자막 보조에 가까워요.</p></div></details>
+        <details><summary>회사 업무에 써도 되나요?</summary><div class="a"><p>말 번역에 쓰는 EXAONE 3.5 모델은 <b>비상업(연구·개인 공부) 라이선스</b>예요. 개인 공부용으로 쓰시고, 업무·서비스에 쓰려면 먼저 만든 사람에게 물어봐 주세요.</p></div></details>
+        <details><summary>지우려면요?</summary><div class="a"><p>압축 푼 폴더를 지우고, <b>%LOCALAPPDATA%\VideoTranslator</b> 폴더도 지우면 돼요. Ollama 는 [설정 → 앱]에서 제거하고, 받은 모델은 <b>%USERPROFILE%\.ollama</b> 에 있어요.</p></div></details>
+      </div>
+    </section>
+
+    <section class="final">
+      <h2>오늘 볼 강의, 한국어로 시작해 보세요.</h2>
+      <div class="ctas" style="justify-content:center">
+        <a class="btn primary" id="dl2" href="https://github.com/svalu/video-translator/releases/latest/download/VideoTranslator_Windows.zip">동영상 동시 통역기 다운로드 <svg class="hi" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></a>
+      </div>
+    </section>
+
+    <footer>
+      <span class="maker"><svg width="20" height="20" viewBox="40 70 470 430" role="img" aria-label="희랑 메이커 마크"><path fill="currentColor" d="M496.29,294.9l-163.29-163.29h146.06v-44H70.94v44h146.06L53.71,294.9l31.11,31.11,34.57-34.57c-1.83,9.61-2.8,19.52-2.8,29.66,0,87.34,71.06,158.4,158.4,158.4s158.4-71.06,158.4-158.4c0-10.13-.97-20.04-2.8-29.65l34.57,34.57,31.11-31.11ZM297,208.82c45.47,8.89,81.38,44.8,90.27,90.27h-90.27v-90.27ZM253,299.09h-90.27c8.89-45.47,44.8-81.38,90.27-90.27v90.27ZM162.73,343.09h90.27v90.27c-45.47-8.89-81.38-44.8-90.27-90.27ZM297,433.37v-90.27h90.27c-8.89,45.47-44.8,81.38-90.27,90.27ZM275,162.69c-10.13,0-20.04.97-29.65,2.8l29.65-29.65,29.65,29.65c-9.61-1.83-19.52-2.8-29.65-2.8Z"/></svg>만든 사람 · 희랑</span>
+      <span>번역 모델: LG AI 연구원 EXAONE 3.5 (비상업 라이선스) · 엔진: Ollama · 받아쓰기: Whisper</span>
+    </footer>
+  </main>
+
+  <script>
+    // 최신 릴리스: 버전·크기·날짜와 변경 내용. 실패해도 다운로드 링크는 그대로 최신을 받는다.
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const inline = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+    fetch('https://api.github.com/repos/svalu/video-translator/releases/latest')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) throw new Error();
+        const a = (j.assets || []).find((x) => x.name === 'VideoTranslator_Windows.zip') || (j.assets || []).find((x) => /\.zip$/i.test(x.name));
+        const v = String(j.tag_name || '').replace(/^v/, '');
+        const d = j.published_at ? new Date(j.published_at).toLocaleDateString('ko-KR') : '';
+        $('facts').innerHTML = `<span>v${esc(v)}</span>${a ? `<span>${(a.size / 1048576).toFixed(0)} MB</span>` : ''}<span>zip · 설치 없음</span><span>Windows 10/11</span>`;
+        $('checked').textContent = 'GitHub 최신 배포 버전을 확인했어요.';
+        if (a) { $('dl').href = a.browser_download_url; $('dl2').href = a.browser_download_url; }
+        $('rel-ver').textContent = 'v' + v; $('rel-date').textContent = d;
+        const lines = String(j.body || '').split('\n').map((l) => l.trim()).filter((l) => /^[-*] /.test(l)).map((l) => l.replace(/^[-*] /, ''));
+        $('rel-notes').innerHTML = lines.length ? lines.map((l) => `<li>${inline(l)}</li>`).join('') : '<li>변경 내용은 배포 기록에서 볼 수 있어요.</li>';
+      })
+      .catch(() => { $('checked').textContent = '최신 버전 정보를 불러오지 못했어요. 다운로드 버튼은 그대로 최신 버전을 받아요.'; $('rel-notes').innerHTML = '<li>배포 기록에서 확인해 주세요.</li>'; });
+    $('copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(location.href); $('copy').textContent = '복사했어요'; setTimeout(() => ($('copy').textContent = '링크 복사'), 1800); } catch { /* 복사가 막힌 브라우저 */ }
+    });
+  </script>
+</body>
+</html>
