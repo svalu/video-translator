@@ -373,6 +373,13 @@ class LocalTranslator:
         except Exception:
             pass
 
+    @staticmethod
+    def _clean(ko):
+        ko = ko.strip().strip('"“”').strip()
+        if ko.startswith("- "):
+            ko = ko[2:].strip()  # "- 어떻게…" 처럼 '-' 를 앞에 붙여 답할 때가 있다
+        return strip_notes(strip_meta(ko))
+
     def translate(self, en):
         self.seen_en = (self.seen_en + [en])[-30:]
         self.topic = guess_topic(self.seen_en, self.topic)
@@ -385,13 +392,18 @@ class LocalTranslator:
         # 답 길이를 원문에 맞춰 묶는다 — 번역 뒤에 설명을 길게 늘어놓지 못하게 (11/10)
         cap = 40 + 5 * len(en.split())
         ko = self._call([{"role": "system", "content": system_prompt(self.topic)}, {"role": "user", "content": user}], num_predict=cap)
+        ko = self._clean(ko)
+        # 11/11: 앞 문장(맥락) 내용을 끌어다 붙여 번역이 원문보다 훨씬 길어질 때가 있다
+        #   'Using Zoom Meetings and Zoom phone.' → '판매 팀이 비디오를 활용해 … Zoom Meetings와 Zoom Phone을 활용하고 있을 가능성이 높습니다.'
+        # 한국어는 보통 영어보다 글자 수가 적다 → 영어의 0.9배+12자를 넘으면 맥락 없이 한 번 더 옮겨 짧은 쪽을 쓴다.
+        if self.ctx and len(ko) > len(en) * 0.9 + 12:
+            ko2 = self._clean(self._call([{"role": "system", "content": system_prompt(self.topic)},
+                                          {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
+            if ko2 and len(ko2) < len(ko):
+                ko = ko2
         self.last_sec = time.time() - t
         self.ctx.append(en)
         self.ctx = self.ctx[-4:]
-        ko = ko.strip().strip('"“”').strip()
-        if ko.startswith("- "):
-            ko = ko[2:].strip()  # "- 어떻게…" 처럼 '-' 를 앞에 붙여 답할 때가 있다
-        ko = strip_notes(strip_meta(ko))
         if ko.startswith("(") and ko.endswith(")"):
             return ""  # "(의미 파악 어려움)" 같은 메모는 읽지 않는다
         if ko in ("-", "") or not re.search(r"[가-힣]", ko):

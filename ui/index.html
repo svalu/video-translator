@@ -242,6 +242,7 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
       <select id="voice"></select>
       <span></span>
     </div>
+    <label class="switch">목소리로 읽기 <small style="color:var(--ink-2);font-weight:500">끄면 자막만 · 빠른 강의에 좋아</small> <input type="checkbox" id="voiceOn"></label>
     <label class="switch">늦어지면 자동으로 빨라지기 <input type="checkbox" id="auto"></label>
     <label class="switch">토막 문장 거르기 <input type="checkbox" id="frag"></label>
     <div class="row between">
@@ -421,7 +422,7 @@ function render(s) {
   $("go").className = "go" + (s.running ? " stop" : "");
   if (s.speaking) {
     $("nowKo").textContent = s.speaking;
-    $("spk").innerHTML = '<span class="speaking-dot" title="말하는 중"></span>';
+    $("spk").innerHTML = s.settings.voice_on === false ? "" : '<span class="speaking-dot" title="말하는 중"></span>';
   } else {
     $("spk").textContent = "";
     if (s.running && s.current.ko) $("nowKo").textContent = s.current.ko;
@@ -435,6 +436,7 @@ function render(s) {
   if (!editing) {
     $("rate").value = s.settings.base_rate; $("rateOut").textContent = s.settings.base_rate;
     $("volume").value = s.settings.volume; $("volOut").textContent = s.settings.volume;
+    $("voiceOn").checked = s.settings.voice_on !== false;
     $("auto").checked = s.settings.auto_speed; $("frag").checked = s.settings.filter_fragments;
     const sel = $("voice");
     if (sel.options.length !== s.voices.length) {
@@ -463,7 +465,7 @@ function render(s) {
     const li = document.createElement("li");
     const ko = document.createElement("div"); ko.className = "ko"; ko.textContent = r.ko;
     const meta = document.createElement("div"); meta.className = "meta";
-    meta.textContent = `${r.time} · 지연 ${r.delay}초 · 빠르기 ${r.rate}`;
+    meta.textContent = `${r.time} · 지연 ${r.delay}초 · ` + (r.mute ? "자막만" : `빠르기 ${r.rate}`);
     li.append(ko, meta); ul.appendChild(li);
   });
 }
@@ -524,7 +526,7 @@ function sendSettings() {
   timer = setTimeout(async () => {
     render(await api("/api/settings", {
       base_rate: +$("rate").value, volume: +$("volume").value,
-      auto_speed: $("auto").checked, filter_fragments: $("frag").checked, voice: $("voice").value || "sapi:Heami", source: $("source").value, ear: $("ear").value }));
+      voice_on: $("voiceOn").checked, auto_speed: $("auto").checked, filter_fragments: $("frag").checked, voice: $("voice").value || "sapi:Heami", source: $("source").value, ear: $("ear").value }));
     editing = false;
   }, 250);
 }
@@ -533,7 +535,7 @@ function sendSettings() {
   $(id === "rate" ? "rateOut" : "volOut").textContent = $(id).value;
   sendSettings();
 }));
-["auto", "frag", "voice", "source", "ear"].forEach(id => $(id).addEventListener("change", () => { editing = true; sendSettings(); }));
+["voiceOn", "auto", "frag", "voice", "source", "ear"].forEach(id => $(id).addEventListener("change", () => { editing = true; sendSettings(); }));
 $("go").addEventListener("click", async () => render(await api(state && state.running ? "/api/stop" : "/api/start", {})));
 $("test").addEventListener("click", () => api("/api/test-voice", {}));
 $("screenBtn").addEventListener("click", () => api("/api/screen", {}));  // 바로 전에 보던 창을 번역

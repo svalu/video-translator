@@ -28,6 +28,7 @@ DEFAULTS = {
     "hold": 1.5,             # 중복 확인용으로 들고 있는 초 (11/06 3.0→1.5: 중복을 문장 단위로 거르게 돼서 짧아도 됨)
     "dup_cover": 0.7,        # 이 비율 이상 겹치면 중복
     "filter_fragments": True,
+    "voice_on": True,        # 목소리로 읽기. 끄면 자막만 (빠른 강의는 목소리가 못 따라가서 문장을 건너뛴다, 11/11)
     "source": "local",       # local = 실시간 자막을 직접 읽고 내 PC 모델로 번역 / translator = LiveCaptions Translator 앱(구글)
     "local_model": "exaone3.5:7.8b",
     "ear": "auto",           # 귀: auto = 실시간 자막이 있으면(윈11) 그것, 없으면(윈10) Whisper / captions / whisper (11/08)
@@ -401,7 +402,7 @@ class Reader:
                             held.append([now, f_en, f_ko, started])
                             # 확정되는 순간 미리 합성 시작 (들고 있는 1.5초 동안 받아 둔다). 중복으로 버려지면 그냥 버림
                             st = self.settings
-                            if st["voice"].startswith("edge:") and getattr(self, "_edge", None):
+                            if st.get("voice_on", True) and st["voice"].startswith("edge:") and getattr(self, "_edge", None):
                                 try:
                                     self._edge.prefetch(f_ko, st["voice"], st["base_rate"])
                                 except Exception:
@@ -466,7 +467,7 @@ class Reader:
                     self._write([datetime.fromtimestamp(t).strftime("%H:%M:%S"), "", "추임새", en, "", "", "", "", "", "", f"{tr.last_sec:.2f}", tr.model])
                     continue
                 st = self.settings
-                if st["voice"].startswith("edge:") and getattr(self, "_edge", None):
+                if st.get("voice_on", True) and st["voice"].startswith("edge:") and getattr(self, "_edge", None):
                     try:
                         self._edge.prefetch(ko, st["voice"], st["base_rate"])
                     except Exception:
@@ -659,10 +660,17 @@ class Reader:
             pending = [item]
             while not self._q.empty():
                 pending.append(self._q.get_nowait())
-            if len(pending) > MAX_BACKLOG:
+            # 11/11: 강사가 2~3초에 한 문장, 목소리는 문장당 4~5초 → 밀려서 건너뛴 문장이 자막에서도 빠졌다.
+            # → 목소리로 못 읽는 문장도 자막에는 보여 준다 (다음에 읽는 문장 앞에 붙여서). 목소리를 끄면 건너뛰지 않는다.
+            lead = []
+            if self.settings.get("voice_on", True) and len(pending) > MAX_BACKLOG:
                 for t, en, ko, started, *_ in pending[:-MAX_BACKLOG]:
                     self.stats["skipped"] += 1
-                    self._write([datetime.fromtimestamp(t).strftime("%H:%M:%S"), "", "밀림", en, ko, ""])
+                    self._write([datetime.fromtimestamp(t).strftime("%H:%M:%S"), "", "밀림(자막만)", en, ko, ""])
+                    lead.append(ko)
+                    with self.lock:
+                        self.recent.appendleft({"time": datetime.now().strftime("%H:%M:%S"), "en": en, "ko": ko,
+                                                "delay": round(time.time() - started, 1), "rate": 0, "mute": True})
                 pending = pending[-MAX_BACKLOG:]
             for i, (t, en, ko, started, *extra) in enumerate(pending):
                 tr_sec = f"{extra[0]:.2f}" if extra else ""
@@ -690,16 +698,29 @@ class Reader:
                 rate = st["base_rate"]
                 if st["auto_speed"]:
                     rate = int(min(st["max_rate"], rate + 30 * backlog + max(0.0, delay - LAG_OK) * 12))
+                voice_on = st.get("voice_on", True)
+                shown = ko
+                if lead:  # 건너뛴 문장을 자막 앞에 붙인다 (너무 길면 가까운 것부터 140자까지)
+                    keep = []
+                    for x in reversed(lead):
+                        if sum(len(k) for k in keep) + len(x) > 140:
+                            break
+                        keep.insert(0, x)
+                    shown, lead = " ".join(keep + [ko]), []
                 with self.lock:
-                    self.now_speaking = ko
+                    self.now_speaking = shown
                     self.recent.appendleft({"time": datetime.now().strftime("%H:%M:%S"), "en": en, "ko": ko,
-                                            "delay": round(delay, 1), "rate": rate})
+                                            "delay": round(delay, 1), "rate": rate, "mute": not voice_on})
                     self.stats["spoken"] += 1
                     self.stats["lat_sum"] += delay
                 self._recent_ko.append((time.time(), ko))
                 self._speaking.set()
                 t_deq = time.time()
-                spoke = speak(ko, rate, st["volume"]) or 0.0
+                if voice_on:
+                    spoke = speak(ko, rate, st["volume"]) or 0.0
+                else:  # 자막만: 읽을 시간만큼 띄워 둔다 (글자 수에 맞춰 1.2~5초, 뒤에 쌓였으면 짧게)
+                    spoke = max(1.0, max(1.2, min(5.0, len(ko) * 0.08)) / (1 + 0.6 * backlog))
+                    self._stop.wait(spoke)
                 self._speaking.clear()
                 # 지연을 쪼개서 기록: 확정까지(들린 뒤 문장 끝), 줄대기(확정 뒤 차례까지), 합성대기(차례 뒤 소리 날 때까지)
                 synth_wait = max(0.0, (time.time() - t_deq) - spoke)
