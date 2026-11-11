@@ -150,6 +150,7 @@ class CaptionSegmenter:
         self.born = {}        # 문장 앞부분(정규화 12자) → [처음 들린 시각, 마지막으로 본 시각] (지연 재기용)
         self.emitted = []     # 내보낸 문장 [정규화 글, 자막 칸에서 마지막으로 본 시각] (기준 문장을 못 찾을 때만 씀)
         self.last_key = None  # 마지막으로 내보낸(또는 읽은 걸로 친) 문장 — 자막 칸에서 이 뒤에 붙는 문장이 새 문장
+        self.new_born = []    # 기준 뒤 새 문장들이 처음 나타난 시각 (차례대로). 되감기 때 옛 문장의 시각을 안 쓰게
         self.carry = None     # (짧은 문장, 시각, 처음 들린 시각)
 
     def prime(self, text):
@@ -194,6 +195,9 @@ class CaptionSegmenter:
                 if keys[j] and self._same(keys[j], self.last_key):
                     start = j + 1
                     break
+        if start is not None:  # 기준 뒤 새 문장 수에 맞춰 '처음 나타난 시각'을 늘리거나 줄인다
+            n_new = len(sents) - start
+            self.new_born = (self.new_born + [now] * n_new)[:n_new]
         for i, x in enumerate(sents):
             alive.add(x)
             self.seen.setdefault(x, now)
@@ -215,9 +219,13 @@ class CaptionSegmenter:
             ok = (x.endswith((".", "?", "!")) and age >= self.LAST_STABLE) if last else age >= self.STABLE
             if not ok:
                 break                  # 차례대로만 내보낸다 (뒤 문장이 먼저 나가면 앞 문장이 기준 앞으로 밀려 안 읽힘)
+            born = b[0]
+            if start is not None and self.new_born:
+                born = self.new_born.pop(0)   # 기준 바로 뒤 문장 = 새 문장 목록의 첫째
             self.emitted.append([key, now])
             self.last_key = key
-            out += self._emit(x, now, b[0])
+            start = i + 1
+            out += self._emit(x, now, born)
         # 오래된 기록 정리 (자막 칸에서 사라진 문장)
         self.seen = {k: t for k, t in self.seen.items() if k in alive}
         if len(self.born) > 400:

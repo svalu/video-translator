@@ -604,9 +604,10 @@ class Reader:
                     continue
                 # 이미 읽은 한국어 문장은 빼고 새 문장만 읽는다
                 # 11/11: 영상을 되감아 같은 부분을 다시 들으면 몇 분 전에 읽은 문장이라고 '중복'으로 버렸다(긴 첫 문장이 통째로 안 읽힘).
-                # 중복은 실시간 자막이 같은 문장을 몇 초 안에 다시 내보낼 때만 생긴다 → 최근 45초 안에 읽은 것과만 비교
+                # 중복은 실시간 자막이 같은 문장을 몇 초 안에 다시 내보낼 때만 생긴다 → 최근 12초 안에 읽은 것과만 비교
+                # (45초로 했더니 금방 되감은 문장 3개를 또 버렸다)
                 now_ = time.time()
-                part = new_korean_part(ko, [k for tk, k in self._recent_ko[-4:] if now_ - tk < 45])
+                part = new_korean_part(ko, [k for tk, k in self._recent_ko[-4:] if now_ - tk < 12])
                 if not part:
                     self.stats["dups"] += 1
                     self._write([datetime.fromtimestamp(t).strftime("%H:%M:%S"), "", "중복", en, ko, ""])
