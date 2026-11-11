@@ -63,6 +63,32 @@ def _default_output_name():
         return ""
 
 
+def _output_has_sound(secs=0.8):
+    """기본 출력 장치(스피커·헤드폰)로 지금 소리가 나가고 있나. 루프백으로 잠깐 들어 본다.
+    조용하면 루프백은 데이터를 안 줘서 read 가 멈추니까, 쌓인 만큼만 읽는다."""
+    try:
+        import numpy as np
+        import pyaudiowpatch as pa
+        p = pa.PyAudio()
+        try:
+            lb = p.get_default_wasapi_loopback()
+            st = p.open(format=pa.paInt16, channels=lb["maxInputChannels"], rate=int(lb["defaultSampleRate"]),
+                        input=True, input_device_index=lb["index"], frames_per_buffer=1024)
+            buf, end = b"", time.time() + secs
+            while time.time() < end:
+                n = st.get_read_available()
+                if n:
+                    buf += st.read(n, exception_on_overflow=False)
+                else:
+                    time.sleep(0.05)
+            st.close()
+            return bool(buf) and float(np.abs(np.frombuffer(buf, dtype=np.int16)).mean()) > 40
+        finally:
+            p.terminate()
+    except Exception:
+        return False
+
+
 def restart_live_captions():
     """실시간 자막을 껐다 켠다 (새 소리 장치를 듣게). 켜는 건 find_caption_box(launch=True) 가 한다."""
     import subprocess
@@ -395,6 +421,7 @@ class Reader:
             except Exception:
                 pass
             out_dev, next_dev_check = _default_output_name(), time.time() + 5
+            silent_hits, last_wd = 0, 0.0  # last_wd: 소리 감시로 마지막에 다시 켠 때
             while not self._stop.is_set():
                 try:
                     text = box.Name or ""
@@ -423,6 +450,26 @@ class Reader:
                             self.status = "듣는 중 · 내 PC 번역"
                         if dev:
                             out_dev = dev
+                        # 11/11: 블루투스 헤드폰이 끊겼다 다시 붙으면 장치 이름이 같아서 위에서 못 알아챈다.
+                        # 실시간 자막은 예전 장치를 붙잡고 '준비 완료'에서 멈춰 있었다(소리는 헤드폰으로 잘 나옴).
+                        # → 자막 칸이 비어 있는데 소리는 나고 있으면, 두 번(10초) 연달아 그럴 때 실시간 자막을 껐다 켠다.
+                        if not text.strip() and _output_has_sound():
+                            silent_hits += 1
+                        else:
+                            silent_hits = 0
+                        if silent_hits >= 2 and now - last_wd > 60:  # 음악만 나오는 구간에서 계속 껐다 켜지 않게 1분 쉼
+                            silent_hits, last_wd = 0, now
+                            self.status = "실시간 자막 다시 켜는 중 · 소리는 나는데 자막이 안 나와서"
+                            restart_live_captions()
+                            box = self._find_box_hard()
+                            if box is None:
+                                return
+                            try:
+                                hide_caption_window()
+                                seg.prime(box.Name or "")
+                            except Exception:
+                                pass
+                            self.status = "듣는 중 · 내 PC 번역"
                 except Exception:
                     self.status = "실시간 자막 연결이 끊겼어. 다시 찾는 중"
                     time.sleep(1)
