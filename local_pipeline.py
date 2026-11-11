@@ -147,57 +147,81 @@ class CaptionSegmenter:
 
     def __init__(self):
         self.seen = {}        # 문장 원문 → 처음 본 시각 (이 모양 그대로)
-        self.born = {}        # 문장 앞부분(정규화 12자) → 처음 들린 시각 (지연 재기용)
-        self.emitted = []     # 내보낸 문장 [정규화 글, 자막 칸에서 마지막으로 본 시각]
+        self.born = {}        # 문장 앞부분(정규화 12자) → [처음 들린 시각, 마지막으로 본 시각] (지연 재기용)
+        self.emitted = []     # 내보낸 문장 [정규화 글, 자막 칸에서 마지막으로 본 시각] (기준 문장을 못 찾을 때만 씀)
+        self.last_key = None  # 마지막으로 내보낸(또는 읽은 걸로 친) 문장 — 자막 칸에서 이 뒤에 붙는 문장이 새 문장
         self.carry = None     # (짧은 문장, 시각, 처음 들린 시각)
 
     def prime(self, text):
-        """시작할 때 이미 자막 칸에 있던 문장은 읽은 걸로 친다."""
+        """시작할 때 이미 자막 칸에 있던 문장은 읽은 걸로 친다.
+        11/11: 마지막 문장은 말하는 중이던 것이라 빼 둔다 — 반쯤 들린 문장을 '읽은 것'으로 쳐서 그 긴 문장을 통째로 안 읽었다."""
         now = time.time()
-        for s in _SPLIT.split(" ".join(text.split())):
-            if norm(s):
-                self.emitted.append([norm(s), now])
+        keys = [norm(x) for x in _SPLIT.split(" ".join(text.split())) if norm(x)]
+        for k in keys[:-1]:
+            self.emitted.append([k, now])
+        self.last_key = keys[-2] if len(keys) >= 2 else None
 
     FORGET = 20.0  # 자막 칸에서 사라지고 이만큼 지나면 '읽은 문장'에서 뺀다
 
+    @staticmethod
+    def _same(a, b):
+        return a == b or (len(a) >= 15 and len(b) >= 15 and (a in b or b in a)) or             (len(a) > 20 and SequenceMatcher(None, a, b).ratio() > 0.85)
+
     def _done(self, key, now):
-        """이미 내보낸 문장인가. 11/11: 영상을 되감아 같은 문장이 다시 나오면 '읽은 것'으로 쳐서 영영 안 읽었다.
-        → 자막 칸에 계속 보이는 동안(마지막으로 본 지 20초 안)만 읽은 것으로 친다. 보일 때마다 시각을 새로 고친다."""
+        """(기준 문장을 못 찾았을 때) 이미 내보낸 문장인가. 자막 칸에 보이는 동안(마지막으로 본 지 20초 안)만."""
         for e in self.emitted[-40:]:
             if now - e[1] > self.FORGET:
                 continue
-            k = e[0]
-            if key == k or (len(key) >= 15 and key in k) or (len(key) > 20 and SequenceMatcher(None, key, k).ratio() > 0.85):
+            if self._same(key, e[0]):
                 e[1] = now
                 return True
         return False
 
     def feed(self, text, now):
-        """[(영어 문장, 처음 들린 시각)] 를 돌려준다."""
+        """[(영어 문장, 처음 들린 시각)] 를 돌려준다.
+
+        11/11: 예전엔 '내용이 같은 문장을 이미 읽었나'로 걸렀다. 영상을 되감으면 자막 칸에 옛 문장과 새로 들린 같은 문장이
+        같이 보여서, 새 문장까지 '읽은 것'으로 쳐서 안 읽었다. → '마지막으로 읽은 문장' 뒤에 붙은 문장만 새 문장으로 본다
+        (자막 칸은 새 말이 끝에 붙는 두루마리). 기준 문장이 칸에서 밀려나 안 보이면 예전처럼 내용으로 거른다."""
         flat = " ".join(text.split())
-        sents = [s for s in _SPLIT.split(flat) if s.strip()]
+        sents = [x for x in _SPLIT.split(flat) if x.strip()]
+        keys = [norm(x) for x in sents]
         out = []
         alive = set()
-        for i, s in enumerate(sents):
-            alive.add(s)
-            self.seen.setdefault(s, now)
-            head = norm(s)[:12]
-            self.born.setdefault(head, now)
-            last = i == len(sents) - 1
-            age = now - self.seen[s]
-            if last:
-                ok = s.endswith((".", "?", "!")) and age >= self.LAST_STABLE
-            else:
-                ok = age >= self.STABLE
-            key = norm(s)
-            if not key or self._done(key, now) or not ok:
+        start = None
+        if self.last_key:
+            for j in range(len(keys) - 1, -1, -1):  # 끝에서부터: 같은 문장이 두 번 보이면 나중 것이 기준
+                if keys[j] and self._same(keys[j], self.last_key):
+                    start = j + 1
+                    break
+        for i, x in enumerate(sents):
+            alive.add(x)
+            self.seen.setdefault(x, now)
+            key = keys[i]
+            head = key[:12]
+            b = self.born.get(head)
+            if b is None or now - b[1] > 10:  # 10초 넘게 안 보이던 머리글이 다시 나오면 새로 들린 것 (되감기)
+                b = self.born[head] = [now, now]
+            b[1] = now
+            if not key:
                 continue
+            if start is not None:
+                if i < start:
+                    continue           # 기준 문장까지는 이미 읽음
+            elif self._done(key, now):
+                continue
+            last = i == len(sents) - 1
+            age = now - self.seen[x]
+            ok = (x.endswith((".", "?", "!")) and age >= self.LAST_STABLE) if last else age >= self.STABLE
+            if not ok:
+                break                  # 차례대로만 내보낸다 (뒤 문장이 먼저 나가면 앞 문장이 기준 앞으로 밀려 안 읽힘)
             self.emitted.append([key, now])
-            out += self._emit(s, now, self.born.get(head, now))
+            self.last_key = key
+            out += self._emit(x, now, b[0])
         # 오래된 기록 정리 (자막 칸에서 사라진 문장)
-        self.seen = {s: t for s, t in self.seen.items() if s in alive}
+        self.seen = {k: t for k, t in self.seen.items() if k in alive}
         if len(self.born) > 400:
-            self.born = dict(list(self.born.items())[-200:])
+            self.born = {h: v for h, v in self.born.items() if now - v[1] < 30}
         if len(self.emitted) > 200:
             self.emitted = self.emitted[-100:]
         if self.carry and now - self.carry[1] > self.CARRY_MAX:
