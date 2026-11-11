@@ -48,6 +48,21 @@ h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 .state.on .dot::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--ok); opacity: 0; animation: ring 1.8s ease-out infinite; }
 @keyframes ring { 0% { transform: scale(.5); opacity: .55; } 100% { transform: scale(1.4); opacity: 0; } }
 .state.warn .dot { background: var(--warn); }
+/* 11/11 준비 중 진행 막대: 모델 올리기·엔진 다시 켜기는 진행률을 안 알려 줘서, 지난번 걸린 시간을 100% 로 잡고 채운다 */
+.load { display: flex; flex-direction: column; gap: 7px; padding: 12px 14px; border-radius: 14px; background: var(--blue-soft); animation: loadIn .3s cubic-bezier(.2,.8,.2,1); }
+.load[hidden] { display: none; }
+.load.done { animation: loadOut .45s ease .25s forwards; }
+@keyframes loadIn { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes loadOut { to { opacity: 0; transform: translateY(-4px); } }
+.load-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.load-label { font-size: 13px; font-weight: 700; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.load-pct { font-size: 20px; font-weight: 800; color: var(--blue); font-variant-numeric: tabular-nums; letter-spacing: -.02em; flex: none; }
+.load-bar { position: relative; height: 8px; border-radius: 99px; background: rgba(31,107,255,.16); overflow: hidden; }
+.load-bar i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: inherit; background: linear-gradient(90deg, #1f6bff, #5b93ff); transition: width .25s linear; }
+.load-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); transform: translateX(-100%); animation: shimmer 1.4s ease-in-out infinite; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+.load-sub { font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .load, .load.done { animation: none; } .load-bar i { transition: none; } .load-bar i::after { animation: none; } }
 .state b { flex: 0 1 auto; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }  /* 긴 안내가 카드 밖으로 삐져나가던 것 (11/10) */
 .state span { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .state.warn { align-items: flex-start; }
@@ -170,6 +185,11 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
 
   <section class="card control" aria-label="영상 소리 번역">
     <div class="state" id="status" role="status"><i class="dot"></i><b id="stMain">대기 중</b><span id="stDetail"></span></div>
+    <div class="load" id="load" hidden aria-live="polite">
+      <div class="load-top"><span class="load-label" id="loadLabel">준비 중</span><span class="load-pct" id="loadPct">0%</span></div>
+      <div class="load-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="loadBar"><i id="loadFill"></i></div>
+      <div class="load-sub" id="loadSub"></div>
+    </div>
     <button class="go" id="go" type="button">읽기 시작</button>
   </section>
 
@@ -333,8 +353,44 @@ async function api(path, body) {
   return r.json();
 }
 
+// ---- 준비 중 진행 막대 (11/11) ----
+// 서버는 '지난 시간·예상 시간'만 준다. 0.6초 사이는 화면에서 시계로 이어서 부드럽게 채운다.
+let loadInfo = null, loadAt = 0, loadRaf = 0, loadShown = false;
+function loadPct(elapsed, expect) {
+  const r = elapsed / Math.max(1, expect);
+  if (r < 1) return r * 92;                              // 예상 시간까지 92%
+  return Math.min(99, 92 + 7 * (1 - Math.exp(-(r - 1) * 1.5)));  // 넘으면 천천히 99% 쪽으로 (멈춘 것처럼 안 보이게)
+}
+function drawLoad() {
+  if (!loadInfo) return;
+  const el = loadInfo.elapsed + (performance.now() - loadAt) / 1000;
+  const p = loadPct(el, loadInfo.expect);
+  $("loadFill").style.width = p.toFixed(1) + "%";
+  $("loadPct").textContent = Math.floor(p) + "%";
+  $("loadBar").setAttribute("aria-valuenow", Math.floor(p));
+  const left = Math.max(0, Math.ceil(loadInfo.expect - el));
+  $("loadSub").textContent = left > 0 ? `보통 ${Math.round(loadInfo.expect)}초쯤 걸려 · 약 ${left}초 남음` : `조금만 더… (${Math.round(el)}초 지남)`;
+  loadRaf = requestAnimationFrame(drawLoad);
+}
+function renderLoad(ld) {
+  const box = $("load");
+  if (ld) {
+    const fresh = !loadInfo || loadInfo.label !== ld.label;
+    loadInfo = ld; loadAt = performance.now();
+    $("loadLabel").textContent = ld.label;
+    if (!loadShown) { box.hidden = false; box.classList.remove("done"); loadShown = true; }
+    if (fresh) { cancelAnimationFrame(loadRaf); drawLoad(); }
+  } else if (loadShown) {
+    loadShown = false; loadInfo = null; cancelAnimationFrame(loadRaf);
+    $("loadFill").style.width = "100%"; $("loadPct").textContent = "100%"; $("loadSub").textContent = "준비 끝";
+    box.classList.add("done");
+    setTimeout(() => { if (!loadShown) { box.hidden = true; box.classList.remove("done"); $("loadFill").style.width = "0"; } }, 750);
+  }
+}
+
 function render(s) {
   state = s;
+  renderLoad(s.running ? s.loading : null);
   // 상태 줄: "듣는 중 · Whisper(GPU) · 헤드폰(…)" → 굵게 '듣는 중' + 회색 나머지 (길면 … , 문제 안내는 두 줄까지)
   const st = $("status");
   const raw = s.running ? s.status : "대기 중";
@@ -345,6 +401,7 @@ function render(s) {
   if (updating) {  // 업데이트 창이 이 앱을 끄기 전까지 앱은 살아 있어서, 상태 갱신이 '대기 중'으로 덮어쓰지 않게
     st.className = "state warn"; main = "업데이트 중"; detail = "검은 창에서 받고 만드는 중 (1분쯤). 끝나면 새 창이 떠";
   }
+  if (s.running && s.loading) { main = "준비 중"; detail = ""; }  // 자세한 건 아래 진행 막대가 말한다
   $("stMain").textContent = main; $("stDetail").textContent = detail; st.title = raw;
   // 새 버전 띠
   const u = s.update || {};

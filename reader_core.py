@@ -236,6 +236,7 @@ class Reader:
         self._log = None
         self._log_file = None
         self._recent_ko = []
+        self.loading = None
         threading.Thread(target=self._voice_loop, daemon=True).start()
 
     # ---------- 바깥에서 부르는 것 ----------
@@ -327,7 +328,47 @@ class Reader:
                 "voices": list(self.voice_names),
                 "ear": self.ear_mode(),
                 "captions_available": captions_available(),
+                "loading": self._loading_state(),
             }
+
+    # ---------- 준비 중 진행 막대 (11/11) ----------
+    # 모델 올리기·엔진 다시 켜기는 진행률을 알려 주지 않는다 → 지난번에 걸린 시간을 기억해 두고 그만큼을 100% 로 잡는다.
+    LOAD_FILE = os.path.join(HERE, "load_times.json")
+    LOAD_DEFAULT = {"model": 12.0, "ollama": 20.0, "captions": 6.0}
+
+    def _load_times(self):
+        try:
+            import json
+            with open(self.LOAD_FILE, encoding="utf-8") as f:
+                return {**self.LOAD_DEFAULT, **json.load(f)}
+        except Exception:
+            return dict(self.LOAD_DEFAULT)
+
+    def _begin(self, kind, label):
+        self.status = label
+        self.loading = {"kind": kind, "label": label, "t0": time.time(), "expect": self._load_times().get(kind, 10.0)}
+
+    def _end(self):
+        ld, self.loading = getattr(self, "loading", None), None
+        if not ld:
+            return
+        took = time.time() - ld["t0"]
+        if took < 0.5:
+            return  # 이미 올라가 있었음 — 다음 예상치를 흐리지 않게
+        times = self._load_times()
+        times[ld["kind"]] = round(times.get(ld["kind"], took) * 0.5 + took * 0.5, 1)  # 지난번과 반반
+        try:
+            import json
+            with open(self.LOAD_FILE, "w", encoding="utf-8") as f:
+                json.dump(times, f)
+        except OSError:
+            pass
+
+    def _loading_state(self):
+        ld = getattr(self, "loading", None)
+        if not ld or not self.running:
+            return None
+        return {"label": ld["label"], "elapsed": round(time.time() - ld["t0"], 2), "expect": ld["expect"]}
 
     # ---------- 안에서 도는 것 ----------
     def _write(self, row):
@@ -390,14 +431,19 @@ class Reader:
         """번역기 앱 없이: 실시간 자막 → 문장 끊기 → 내 PC 번역 → 읽을 줄."""
         tr = LocalTranslator(self.settings["local_model"])
         self._translator = tr
-        self.status = "번역 모델 올리는 중 (처음엔 10초쯤)"
         try:
+            self._begin("model", "번역 모델 올리는 중")
             tr.warm()
+            self._end()
             if tr.on_cpu_only():  # 그래픽카드가 있는데 CPU 로만 돌면 Ollama 를 다시 켜서 GPU 를 다시 찾게 (11/11)
-                self.status = "번역 엔진 다시 켜는 중 (그래픽카드를 못 찾고 CPU 로만 돌고 있어서, 30초쯤)"
+                self._begin("ollama", "번역 엔진 다시 켜는 중 · 그래픽카드를 다시 찾아")
                 restart_ollama()
+                self._end()
+                self._begin("model", "번역 모델 다시 올리는 중")
                 tr.warm()
+                self._end()
         except Exception as e:
+            self.loading = None
             self.status = f"번역 모델을 못 불렀어 (Ollama 꺼짐?): {type(e).__name__}"
             self.running = False
             return
@@ -432,7 +478,9 @@ class Reader:
         if self.ear_mode() == "whisper":
             return self._whisper_listen(jobs)
         with auto.UIAutomationInitializerInThread():
+            self._begin("captions", "실시간 자막 켜는 중")
             box = self._find_box_hard()
+            self._end()
             if box is None or self._stop.is_set():
                 return  # 11/11: 모델 올리는 중에 멈추면 '듣는 중'으로 덮어쓰던 것
             self.status = f"듣는 중 · 내 PC 번역"
