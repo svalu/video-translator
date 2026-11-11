@@ -291,6 +291,22 @@ class LocalTranslator:
         """모델을 그래픽 메모리에 올려 둔다 (첫 문장이 늦지 않게). 실패하면 예외."""
         self._call([{"role": "user", "content": "안녕"}], num_predict=1)
 
+    def on_cpu_only(self):
+        """모델이 그래픽카드를 하나도 안 쓰고 CPU 로만 올라가 있나 (NVIDIA 가 있을 때만 따짐).
+        11/11: PC 를 켤 때 Ollama 가 자동 업데이트 뒤 그래픽카드가 준비되기 전에 떠서 GPU 를 못 찾았다
+        → 100% CPU, 번역이 문장당 2초 → 4~10초. Ollama 를 다시 켜면 다시 찾는다."""
+        import shutil
+        if not shutil.which("nvidia-smi"):
+            return False
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=5) as r:
+                for m in json.load(r).get("models", []):
+                    if self.model in (m.get("name"), m.get("model")):
+                        return int(m.get("size_vram", 0)) == 0
+        except Exception:
+            pass
+        return False
+
     def unload(self):
         try:
             body = json.dumps({"model": self.model, "keep_alive": 0}).encode()

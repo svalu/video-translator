@@ -89,6 +89,26 @@ def _output_has_sound(secs=0.8):
         return False
 
 
+def restart_ollama():
+    """Ollama(번역 엔진)를 껐다 켠다. 'ollama app.exe' 를 탐색기로 켜서 이 앱과 묶이지 않게(앱을 꺼도 계속 뜨게)."""
+    import subprocess
+    for name in ("ollama app.exe", "ollama.exe"):
+        subprocess.run(["taskkill", "/im", name, "/f"], capture_output=True, creationflags=0x08000000)
+    time.sleep(2)
+    app = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama app.exe")
+    if os.path.exists(app):
+        subprocess.Popen(["explorer.exe", app])
+    else:
+        subprocess.Popen(["ollama", "serve"], creationflags=0x08000000)
+    for _ in range(40):
+        try:
+            import urllib.request
+            urllib.request.urlopen("http://127.0.0.1:11434/api/version", timeout=1)
+            return
+        except Exception:
+            time.sleep(1)
+
+
 def restart_live_captions():
     """실시간 자막을 껐다 켠다 (새 소리 장치를 듣게). 켜는 건 find_caption_box(launch=True) 가 한다."""
     import subprocess
@@ -373,6 +393,10 @@ class Reader:
         self.status = "번역 모델 올리는 중 (처음엔 10초쯤)"
         try:
             tr.warm()
+            if tr.on_cpu_only():  # 그래픽카드가 있는데 CPU 로만 돌면 Ollama 를 다시 켜서 GPU 를 다시 찾게 (11/11)
+                self.status = "번역 엔진 다시 켜는 중 (그래픽카드를 못 찾고 CPU 로만 돌고 있어서, 30초쯤)"
+                restart_ollama()
+                tr.warm()
         except Exception as e:
             self.status = f"번역 모델을 못 불렀어 (Ollama 꺼짐?): {type(e).__name__}"
             self.running = False
