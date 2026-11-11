@@ -148,18 +148,27 @@ class CaptionSegmenter:
     def __init__(self):
         self.seen = {}        # 문장 원문 → 처음 본 시각 (이 모양 그대로)
         self.born = {}        # 문장 앞부분(정규화 12자) → 처음 들린 시각 (지연 재기용)
-        self.emitted = []     # 내보낸 문장 (정규화)
+        self.emitted = []     # 내보낸 문장 [정규화 글, 자막 칸에서 마지막으로 본 시각]
         self.carry = None     # (짧은 문장, 시각, 처음 들린 시각)
 
     def prime(self, text):
         """시작할 때 이미 자막 칸에 있던 문장은 읽은 걸로 친다."""
+        now = time.time()
         for s in _SPLIT.split(" ".join(text.split())):
             if norm(s):
-                self.emitted.append(norm(s))
+                self.emitted.append([norm(s), now])
 
-    def _done(self, key):
+    FORGET = 20.0  # 자막 칸에서 사라지고 이만큼 지나면 '읽은 문장'에서 뺀다
+
+    def _done(self, key, now):
+        """이미 내보낸 문장인가. 11/11: 영상을 되감아 같은 문장이 다시 나오면 '읽은 것'으로 쳐서 영영 안 읽었다.
+        → 자막 칸에 계속 보이는 동안(마지막으로 본 지 20초 안)만 읽은 것으로 친다. 보일 때마다 시각을 새로 고친다."""
         for e in self.emitted[-40:]:
-            if key == e or (len(key) >= 15 and key in e) or (len(key) > 20 and SequenceMatcher(None, key, e).ratio() > 0.85):
+            if now - e[1] > self.FORGET:
+                continue
+            k = e[0]
+            if key == k or (len(key) >= 15 and key in k) or (len(key) > 20 and SequenceMatcher(None, key, k).ratio() > 0.85):
+                e[1] = now
                 return True
         return False
 
@@ -181,9 +190,9 @@ class CaptionSegmenter:
             else:
                 ok = age >= self.STABLE
             key = norm(s)
-            if not ok or not key or self._done(key):
+            if not key or self._done(key, now) or not ok:
                 continue
-            self.emitted.append(key)
+            self.emitted.append([key, now])
             out += self._emit(s, now, self.born.get(head, now))
         # 오래된 기록 정리 (자막 칸에서 사라진 문장)
         self.seen = {s: t for s, t in self.seen.items() if s in alive}

@@ -227,6 +227,7 @@ class Reader:
             self._stop.clear()
             self.stats = {"spoken": 0, "dups": 0, "frags": 0, "skipped": 0, "lat_sum": 0.0}
             self.recent.clear()
+            self._recent_ko = []  # 11/11: 지난번에 읽은 문장 때문에 이번 문장을 '중복'으로 버리지 않게
             os.makedirs(os.path.join(HERE, "logs"), exist_ok=True)
             path = os.path.join(HERE, "logs", f"읽기_{datetime.now():%Y%m%d_%H%M}.csv")
             self._log_file = open(path, "w", newline="", encoding="utf-8-sig")
@@ -602,7 +603,10 @@ class Reader:
                     self._write([datetime.fromtimestamp(t).strftime("%H:%M:%S"), "", "토막", en, ko, ""])
                     continue
                 # 이미 읽은 한국어 문장은 빼고 새 문장만 읽는다
-                part = new_korean_part(ko, self._recent_ko[-4:])
+                # 11/11: 영상을 되감아 같은 부분을 다시 들으면 몇 분 전에 읽은 문장이라고 '중복'으로 버렸다(긴 첫 문장이 통째로 안 읽힘).
+                # 중복은 실시간 자막이 같은 문장을 몇 초 안에 다시 내보낼 때만 생긴다 → 최근 45초 안에 읽은 것과만 비교
+                now_ = time.time()
+                part = new_korean_part(ko, [k for tk, k in self._recent_ko[-4:] if now_ - tk < 45])
                 if not part:
                     self.stats["dups"] += 1
                     self._write([datetime.fromtimestamp(t).strftime("%H:%M:%S"), "", "중복", en, ko, ""])
@@ -619,7 +623,7 @@ class Reader:
                                             "delay": round(delay, 1), "rate": rate})
                     self.stats["spoken"] += 1
                     self.stats["lat_sum"] += delay
-                self._recent_ko.append(ko)
+                self._recent_ko.append((time.time(), ko))
                 self._speaking.set()
                 t_deq = time.time()
                 spoke = speak(ko, rate, st["volume"]) or 0.0
