@@ -17,18 +17,58 @@ import uiautomation as auto
 
 OLLAMA = "http://127.0.0.1:11434/api/chat"
 
-SYSTEM = """너는 영어 강의를 한국어로 동시통역하는 통역사야.
-강의 주제: Zendesk(고객 상담 소프트웨어) 교육. 듣는 사람은 한국 콜센터·UX 실무자.
+# 11/11: 줌 강의를 듣는데 'Zoom IQ licensing'을 'Zendesk 라이선스'로 옮겼다 — 강의 주제가 Zendesk 로 박혀 있어서.
+# → 최근 영어 문장에 나온 제품 이름으로 강의 주제를 알아서 고르고(TOPICS), 원문에 없는 회사·제품 이름은 넣지 않게 한다.
+TOPICS = {
+    "zendesk": {
+        "about": "Zendesk(고객 상담 소프트웨어) 교육. 듣는 사람은 한국 콜센터·UX 실무자.",
+        "terms": "Zendesk, Copilot, AI agent, ticket, macro, trigger, escalation, knowledge base, resolution platform, agent workspace."
+                 " (agent = 상담원, AI agent = AI 에이전트, ticket = 티켓)",
+        "fix": "자막이 잘못 알아들은 듯한 고유명사는 바로잡는다: Zenda Desk → Zendesk, E12·Eat well → Eatwell(데모용 가상 음식 배달 회사).",
+    },
+    "zoom": {
+        "about": "Zoom(화상회의·전화·컨택센터) 파트너 교육. 듣는 사람은 한국 실무자.",
+        "terms": "Zoom, Zoom IQ, Revenue Accelerator, AI Companion, Zoom Meetings, Zoom Phone, Contact Center, Virtual Agent,"
+                 " Zoom Workplace, Workvivo, Zoom Spaces, revenue, pipeline, deal, forecasting, coaching, license.",
+        "fix": "",
+    },
+    "general": {
+        "about": "업무용 소프트웨어 교육.",
+        "terms": "회사·제품·기능 이름.",
+        "fix": "",
+    },
+}
+
+SYSTEM_TMPL = """너는 영어 강의를 한국어로 동시통역하는 통역사야.
+강의 주제: {about}
 규칙:
 - '옮길 문장' 한 줄만 한국어로 옮긴다. 앞 문장은 맥락 참고용이고, 앞 문장 내용을 번역에 다시 넣지 않는다.
 - 영어는 실시간 자막이라 말버릇(you know, so, his his)·반복·끊긴 말이 섞여 있다. 군더더기는 빼고 말하려는 뜻만 자연스러운 존댓말 한두 문장으로.
-- 이 용어는 영어 그대로 쓴다: Zendesk, Copilot, AI agent, ticket, macro, trigger, escalation, knowledge base, resolution platform, agent workspace.
-  (agent = 상담원, AI agent = AI 에이전트, ticket = 티켓)
-- 자막이 잘못 알아들은 듯한 고유명사는 바로잡는다: Zenda Desk → Zendesk, E12·Eat well → Eatwell(데모용 가상 음식 배달 회사).
-- 옮길 문장이 인사말·추임새뿐이거나 뜻을 알 수 없으면 '-' 한 글자만 출력한다.
+- 이 용어는 영어 그대로 쓴다: {terms}
+- 회사·제품 이름은 원문에 나온 그대로 쓴다. 원문에 없는 회사·제품 이름을 넣거나 다른 이름으로 바꾸지 않는다.
+{fix}- 옮길 문장이 인사말·추임새뿐이거나 뜻을 알 수 없으면 '-' 한 글자만 출력한다.
 - 설명·메모·주석·괄호 설명(Note: …)·따옴표·영어 원문 없이 한국어 번역만 출력한다. 뜻이 애매해도 가장 그럴듯한 번역 하나만.
 - 번역을 한 번만 쓴다. '더 명확한 번역은…', '추가 설명이 필요하면…' 같은 말, 다시 고쳐 쓴 번역, 대안은 절대 붙이지 않는다.
 - 문장 조각(예: 'Consistency and reporting purposes.')이면 그 조각만 짧게 옮긴다."""
+
+
+def system_prompt(topic):
+    t = TOPICS.get(topic, TOPICS["general"])
+    return SYSTEM_TMPL.format(about=t["about"], terms=t["terms"], fix=("- " + t["fix"] + "\n") if t["fix"] else "")
+
+
+def guess_topic(sentences, prev="zendesk"):
+    """최근 영어 문장에 나온 제품 이름으로 강의 주제를 고른다. 둘 다 안 나오면 하던 대로."""
+    text = " ".join(sentences).lower()
+    zd, zm = text.count("zendesk"), len(re.findall(r"\bzoom\b", text))
+    if zm > zd:
+        return "zoom"
+    if zd > zm:
+        return "zendesk"
+    return prev
+
+
+SYSTEM = system_prompt("zendesk")  # 예전 이름 (다른 곳에서 부를 때)
 
 # 11/10: 모델이 번역 뒤에 듣는 사람한테 하는 말을 붙여 자막에 그대로 나왔다.
 #   "…확인하세요. 정확한 이해를 위해 조금 더 명확한 표현이 필요할 수 있으나… 알려주세요. 더 명확한 번역을 위해…"
@@ -277,8 +317,10 @@ _CAPTION_FIX = [
 ]
 
 
-def fix_caption(en):
+def fix_caption(en, topic="zendesk"):
     for pat, rep in _CAPTION_FIX:
+        if rep == "Eatwell" and topic != "zendesk":
+            continue  # Eatwell 은 Zendesk 데모 회사 — 다른 강의의 'E12' 는 건드리지 않는다
         en = pat.sub(rep, en)
     return en
 
@@ -289,6 +331,8 @@ class LocalTranslator:
     def __init__(self, model):
         self.model = model
         self.ctx = []
+        self.seen_en = []      # 강의 주제를 고르려고 최근 영어 문장을 모아 둔다
+        self.topic = "zendesk"
         self.last_sec = 0.0
 
     def _call(self, messages, keep="30m", num_predict=200):
@@ -330,7 +374,9 @@ class LocalTranslator:
             pass
 
     def translate(self, en):
-        en = fix_caption(en)
+        self.seen_en = (self.seen_en + [en])[-30:]
+        self.topic = guess_topic(self.seen_en, self.topic)
+        en = fix_caption(en, self.topic)
         user = ""
         if self.ctx:
             user += "앞 문장(참고만):\n" + "\n".join(self.ctx[-2:]) + "\n\n"
@@ -338,7 +384,7 @@ class LocalTranslator:
         t = time.time()
         # 답 길이를 원문에 맞춰 묶는다 — 번역 뒤에 설명을 길게 늘어놓지 못하게 (11/10)
         cap = 40 + 5 * len(en.split())
-        ko = self._call([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}], num_predict=cap)
+        ko = self._call([{"role": "system", "content": system_prompt(self.topic)}, {"role": "user", "content": user}], num_predict=cap)
         self.last_sec = time.time() - t
         self.ctx.append(en)
         self.ctx = self.ctx[-4:]
