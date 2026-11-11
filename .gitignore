@@ -12,3 +12,6 @@ settings.json
 # Whisper GPU 부품 (준비 점검이 받음, 약 2GB)
 cuda/
 .download/
+
+# 이 PC 는 exe 대신 코드로 쓴다는 표시 (update.py 가 빌드를 건너뜀)
+코드로_쓰기
