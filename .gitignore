@@ -15,3 +15,6 @@ cuda/
 
 # 이 PC 는 exe 대신 코드로 쓴다는 표시 (update.py 가 빌드를 건너뜀)
 코드로_쓰기
+
+# 준비 단계가 지난번에 몇 초 걸렸나 (PC 마다 다름)
+load_times.json
