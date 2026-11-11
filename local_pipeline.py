@@ -195,12 +195,15 @@ class CaptionSegmenter:
 
     def prime(self, text):
         """시작할 때 이미 자막 칸에 있던 문장은 읽은 걸로 친다.
-        11/11: 마지막 문장은 말하는 중이던 것이라 빼 둔다 — 반쯤 들린 문장을 '읽은 것'으로 쳐서 그 긴 문장을 통째로 안 읽었다."""
+        11/11: 말하던 중인 마지막 문장(마침표 없이 끝남)은 빼 둔다 — 반쯤 들린 문장을 '읽은 것'으로 쳐서 그 긴 문장을 통째로 안 읽었다.
+        마침표로 끝난 마지막 문장은 이미 끝난 옛 문장이라 읽지 않는다 (자동 시험에서 찾음: 시작하자마자 옛 문장을 읽었다)."""
         now = time.time()
-        keys = [norm(x) for x in _SPLIT.split(" ".join(text.split())) if norm(x)]
-        for k in keys[:-1]:
+        flat = " ".join(text.split())
+        keys = [norm(x) for x in _SPLIT.split(flat) if norm(x)]
+        done = keys if flat.endswith((".", "?", "!")) else keys[:-1]
+        for k in done:
             self.emitted.append([k, now])
-        self.last_key = keys[-2] if len(keys) >= 2 else None
+        self.last_key = done[-1] if done else None
 
     FORGET = 20.0  # 자막 칸에서 사라지고 이만큼 지나면 '읽은 문장'에서 뺀다
 
@@ -277,6 +280,12 @@ class CaptionSegmenter:
         return out
 
     def _emit(self, s, now, born):
+        # 11/11: 실시간 자막이 고쳐 쓰다 남긴 한 단어('Crockett.', 'Benefit.')가 다음 문장 앞에 붙어 '크로켓, …'으로 번역됐다.
+        # → 한 단어짜리는 버린다. 다음 문장이 붙여 둔 말로 시작하면('Let's dive. Let's dive Your team…') 붙이지 않는다.
+        if len(s.split()) == 1 and not self.carry:
+            return []
+        if self.carry and norm(s).startswith(norm(self.carry[0])):
+            self.carry = None
         if len(s.split()) < self.MIN_WORDS:
             if self.carry:  # 짧은 게 두 번 연달아 오면 이어 붙여 둔다
                 s = self.carry[0] + " " + s
@@ -315,6 +324,34 @@ _CAPTION_FIX = [
     (re.compile(r"\bEat well\b", re.I), "Eatwell"),
     (re.compile(r"\bZenda? ?Desk\b", re.I), "Zendesk"),
 ]
+
+
+# 번역이 제품 이름을 한글로 바꿨을 때 되돌린다 (규칙으로 부탁해도 가끔 무시한다, 11/11 'Zoom Meetings' → '줌 미팅').
+# 영어 원문에 그 이름이 있을 때만. 긴 이름부터.
+_NAMES = [
+    ("Zoom Revenue Accelerator", r"(?:Zoom|줌)\s?[가-힣]{0,6}\s?(?:액셀러레이터|엑셀러레이터|가속[가-힣]{0,2}(?:\s?도구)?)"),  # 'Zoom 리테일러 가속기'로도 옮겼다
+    ("Revenue Accelerator", r"(?:레비뉴|레버뉴|수익|매출)\s?(?:액셀러레이터|엑셀러레이터|가속기)"),
+    ("Zoom Contact Center", r"줌\s?(?:컨택|콘택트|컨택트)\s?센터"),
+    ("Zoom Virtual Agent", r"줌\s?(?:버추얼|가상)\s?(?:에이전트|상담원)"),
+    ("Zoom Meetings", r"줌\s?(?:미팅스?|회의)"),
+    ("Zoom Phone", r"줌\s?(?:폰|전화)"),
+    ("Zoom Workplace", r"줌\s?워크플레이스"),
+    ("Zoom Spaces", r"줌\s?스페이스(?:스|즈)?"),
+    ("AI Companion", r"AI\s?(?:컴패니언|동반자)"),
+    ("Zoom IQ", r"줌\s?(?:IQ|아이큐)"),
+    ("Workvivo", r"워크비보"),
+    ("Zoom", r"줌(?=$|[^가-힣]|[은는이가을를의에과와도로만으])"),  # '해 줌니다' 같은 낱말 속 '줌'은 그대로
+    ("Zendesk", r"젠데스크|젠디스크"),
+    ("Copilot", r"코파일럿|부조종사"),
+]
+
+
+def restore_names(en, ko):
+    low = en.lower()
+    for name, pat in _NAMES:
+        if name.lower() in low and name.lower() not in ko.lower():
+            ko = re.sub(r"(?<![가-힣])(?:" + pat + r")", name, ko)
+    return ko
 
 
 def fix_caption(en, topic="zendesk"):
@@ -401,6 +438,7 @@ class LocalTranslator:
                                           {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
             if ko2 and len(ko2) < len(ko):
                 ko = ko2
+        ko = restore_names(en, ko)
         self.last_sec = time.time() - t
         self.ctx.append(en)
         self.ctx = self.ctx[-4:]
