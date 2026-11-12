@@ -167,6 +167,28 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(lp.fix_caption("Viva la vivo", "zendesk"), "Viva la vivo")
         self.assertNotIn("Zendesk", lp.system_prompt("general"))
 
+    def test_auto_terms(self):
+        """v0.5.5: 용어를 강의에서 저절로 끌어온다."""
+        c = lp.name_candidates
+        self.assertEqual(c("We use Figma and Amazon Web Services every day."), ["Figma", "Amazon Web Services"])
+        self.assertEqual(c("Then I opened it on Monday."), [])                 # 문장 첫 낱말·I·요일은 이름이 아니다
+        self.assertEqual(c("Figma is great.", known=["Figma"]), ["Figma"])     # 아는 이름이면 문장 처음이어도
+        self.assertEqual(c("Great. Tools are here."), [])
+        t = "ZSA - Workvivo 2026 - Zoom Up Partner Learning Center"
+        self.assertEqual(lp.fix_by_title("Vivo isn't just a platform.", t), "Workvivo isn't just a platform.")
+        self.assertEqual(lp.fix_by_title("With Work Vivo you can.", t), "With Workvivo you can.")
+        self.assertEqual(lp.fix_by_title("Work hard and Learn more at the Center.", t), "Work hard and Learn more at the Center.")
+        self.assertEqual(lp.fix_by_title("Partners love it.", t), "Partners love it.")
+        self.assertEqual(lp.foreign_names("Vivo isn't just a platform.", "Zendesk는 플랫폼이 아닙니다."), ["Zendesk"])
+        self.assertEqual(lp.foreign_names("Open AI agents in Co-pilot.", "Copilot에서 AI agent를 엽니다."), [])
+        p = lp.system_prompt("general", ["Figma"], "Figma 101")
+        self.assertIn("Figma 101", p)
+        self.assertIn("들린 이름: Figma", p)
+        b = lp._BROWSER_TAIL
+        self.assertEqual(b.sub("", "ZSA - Workvivo 2026 - Google Chrome"), "ZSA - Workvivo 2026")
+        self.assertEqual(b.sub("", "Course - 프로필 1 - Microsoft Edge"), "Course")
+        self.assertIsNone(b.search("동영상 동시 통역기"))
+
     def test_restore_names(self):
         """한글로 바뀐 제품 이름을 되돌린다 (v0.5.1). 원문에 있을 때만."""
         r = lp.restore_names

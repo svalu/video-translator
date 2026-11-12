@@ -52,9 +52,117 @@ SYSTEM_TMPL = """너는 영어 강의를 한국어로 동시통역하는 통역�
 - 문장 조각(예: 'Consistency and reporting purposes.')이면 그 조각만 짧게 옮긴다."""
 
 
-def system_prompt(topic):
+def system_prompt(topic, extra_terms=(), title=""):
     t = TOPICS.get(topic, TOPICS["general"])
-    return SYSTEM_TMPL.format(about=t["about"], terms=t["terms"], fix=("- " + t["fix"] + "\n") if t["fix"] else "")
+    about, terms = t["about"], t["terms"]
+    if title:  # 11/12: 브라우저 창 제목 = 강의 이름. 이름을 알아보는 데만 쓰게 한다
+        about += f" 지금 열려 있는 페이지 제목은 '{title}' (참고만 — 원문에 없는 말을 번역에 넣지 않는다)."
+    if extra_terms:
+        terms += " 이 강의에서 들린 이름: " + ", ".join(extra_terms) + "."
+    return SYSTEM_TMPL.format(about=about, terms=terms, fix=("- " + t["fix"] + "\n") if t["fix"] else "")
+
+
+# ---- 11/12: 용어를 강의에서 저절로 끌어온다 (Zendesk·Zoom 말고 다른 강의에서도 쓰게) ----
+# ① 들린 영어에서 두 번 넘게 나온 이름(대문자로 시작하는 낱말 묶음)을 '영어 그대로 쓸 용어'에 넣는다.
+# ② 브라우저 창 제목(강의 이름)을 강의 주제에 넣고, 자막이 그 이름을 잘못 받아 적었으면 바로잡는다.
+_NAME_RE = re.compile(r"[A-Z][A-Za-z0-9]*(?:[ -][A-Z][A-Za-z0-9]*){0,2}")
+_NOT_NAME = set("""I OK Okay Yes No Mr Mrs Ms Dr Monday Tuesday Wednesday Thursday Friday Saturday Sunday
+January February March April May June July August September October November December English Korean Korea""".split())
+
+
+def name_candidates(en, known=()):
+    """문장 안의 이름 후보. 문장 첫 낱말은 그냥 대문자일 수 있어서, 이미 아는 이름으로 시작할 때만 친다."""
+    known = {k.lower() for k in known}
+    out = []
+    for m in _NAME_RE.finditer(en):
+        name = m.group()
+        words = re.split(r"[ -]", name)
+        at_start = m.start() == 0 or en[:m.start()].rstrip()[-1:] in ".?!:"
+        if at_start and words[0].lower() not in known:
+            # 첫 낱말은 떼고 나머지만 ('With Workvivo' → 'Workvivo', 'The Activity Feed' → 'Activity Feed')
+            if len(words) == 1:
+                continue
+            name = name[len(words[0]) + 1:]
+            words = words[1:]
+        if all(w in _NOT_NAME for w in words):
+            continue
+        out.append(name)
+    return out
+
+
+_BROWSER_TAIL = re.compile(r"(?:\s[-–—]\s(?:프로필 ?\d*|Profile ?\d*|개인|회사|Personal|Work))?"
+                           r"\s[-–—]\s(?:Google Chrome|Chrome|Microsoft\s?Edge|Naver Whale|Whale|Mozilla Firefox|Firefox)$")
+_title_cache = [0.0, ""]
+
+
+def browser_title(max_age=8.0):
+    """맨 위에 있는 브라우저 창의 제목 (끝의 ' - Chrome' 은 뗀다). 없으면 ''. max_age 초 동안은 기억해 둔 걸 준다."""
+    now = time.time()
+    if now - _title_cache[0] < max_age:
+        return _title_cache[1]
+    found = [""]
+    try:
+        import ctypes
+        import ctypes.wintypes as wt
+        u = ctypes.windll.user32
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, wt.HWND, wt.LPARAM)
+        def each(hwnd, _):
+            if not u.IsWindowVisible(hwnd):
+                return True
+            n = u.GetWindowTextLengthW(hwnd)
+            if not n:
+                return True
+            buf = ctypes.create_unicode_buffer(n + 1)
+            u.GetWindowTextW(hwnd, buf, n + 1)
+            t = buf.value.replace("​", "")
+            if _BROWSER_TAIL.search(t):
+                found[0] = _BROWSER_TAIL.sub("", t).strip()
+                return False  # EnumWindows 는 위에 있는 창부터 준다
+            return True
+
+        u.EnumWindows(each, 0)
+    except Exception:
+        pass
+    _title_cache[:] = [now, found[0][:120]]
+    return _title_cache[1]
+
+
+def fix_by_title(en, title):
+    """자막이 강의 이름을 잘못 받아 적었으면 제목에 있는 이름으로 (Vivo → Workvivo, Work Vivo → Workvivo)."""
+    names = [w for w in re.findall(r"[A-Za-z][A-Za-z0-9]{5,}", title) if w[0].isupper()]
+    if not names:
+        return en
+    in_title = {w.lower() for w in re.findall(r"[A-Za-z0-9]+", title)}
+
+    def swap(m):
+        w = m.group()
+        if w.lower() in in_title:
+            return w
+        for n in names:
+            a, b = w.lower(), n.lower()
+            if len(a) >= 4 and b.endswith(a):
+                return n
+            # 비슷하게 잘못 적은 것. 복수형(Partners)·앞부분만 같은 말(Learn)은 다른 낱말이니 건드리지 않는다
+            if not a.startswith(b) and not b.startswith(a) and SequenceMatcher(None, a, b).ratio() >= 0.85:
+                return n
+        return w
+
+    for n in names:  # 두 낱말로 쪼개 적은 것: 'Work Vivo' → 'Workvivo'
+        for i in range(2, len(n) - 1):
+            en = re.sub(r"\b" + re.escape(n[:i]) + r"[ -]" + re.escape(n[i:]) + r"\b", n, en, flags=re.I)
+    return re.sub(r"\b[A-Z][A-Za-z0-9]{3,}\b", swap, en)
+
+
+def foreign_names(en, ko):
+    """번역에 들어갔는데 원문에는 없는 영어 이름 (대문자로 시작, 4자 이상). 모델이 지어낸 이름을 잡는다."""
+    flat = re.sub(r"[^a-z0-9]", "", en.lower())
+    out = []
+    for w in re.findall(r"[A-Z][A-Za-z0-9]{3,}", ko):
+        k = w.lower()
+        if k not in flat and k.rstrip("s") not in flat:
+            out.append(w)
+    return out
 
 
 def guess_topic(sentences, prev="zendesk"):
@@ -382,6 +490,9 @@ class LocalTranslator:
         self.model = model
         self.ctx = []
         self.seen_en = []      # 강의 주제를 고르려고 최근 영어 문장을 모아 둔다
+        self.names = {}        # 들린 이름 → 횟수 (11/12)
+        self.title = ""        # 브라우저 창 제목
+        self.use_title = True
         self.topic = "general"  # 11/12: 처음부터 Zendesk 로 잡으면 아직 이름이 안 나온 줌 강의에 'Zendesk' 를 넣는다
         self.last_sec = 0.0
 
@@ -394,6 +505,11 @@ class LocalTranslator:
         req = urllib.request.Request(OLLAMA, body, {"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=60) as r:
             return json.load(r)["message"]["content"].strip()
+
+    def auto_terms(self, limit=15):
+        """두 번 넘게 들린 이름, 많이 들린 순으로."""
+        got = sorted((n for n, c in self.names.items() if c >= 2), key=lambda n: -self.names[n])
+        return got[:limit]
 
     def warm(self):
         """모델을 그래픽 메모리에 올려 둔다 (첫 문장이 늦지 않게). 실패하면 예외."""
@@ -434,6 +550,21 @@ class LocalTranslator:
         self.seen_en = (self.seen_en + [en])[-30:]
         self.topic = guess_topic(self.seen_en, self.topic)
         en = fix_caption(en, self.topic)
+        # 창 제목은 강의와 상관있을 때만 쓴다 (다른 탭을 보고 있으면 엉뚱한 제목이 온다):
+        # 제목의 낱말이 강의에서 들렸거나, 제목 덕에 잘못 적힌 이름을 바로잡았을 때
+        title = browser_title() if self.use_title else ""
+        if title:
+            fixed = fix_by_title(en, title)
+            heard = " ".join(self.seen_en + [en]).lower()  # en 은 이미 바로잡은 문장
+            if fixed != en or any(w.lower() in heard for w in re.findall(r"[A-Za-z]{4,}", title)):
+                self._title_ok = title
+            if getattr(self, "_title_ok", "") == title:
+                en = fixed
+        self.title = title if getattr(self, "_title_ok", "") == title else ""
+        known = set(self.names) | {w for n in self.names for w in n.split()} | set(re.findall(r"[A-Z][A-Za-z0-9]+", self.title))
+        for n in name_candidates(en, known):
+            self.names[n] = self.names.get(n, 0) + 1
+        sysmsg = system_prompt(self.topic, self.auto_terms(), self.title)
         user = ""
         if self.ctx:
             user += "앞 문장(참고만):\n" + "\n".join(self.ctx[-2:]) + "\n\n"
@@ -441,22 +572,24 @@ class LocalTranslator:
         t = time.time()
         # 답 길이를 원문에 맞춰 묶는다 — 번역 뒤에 설명을 길게 늘어놓지 못하게 (11/10)
         cap = 40 + 5 * len(en.split())
-        ko = self._call([{"role": "system", "content": system_prompt(self.topic)}, {"role": "user", "content": user}], num_predict=cap)
+        ko = self._call([{"role": "system", "content": sysmsg}, {"role": "user", "content": user}], num_predict=cap)
         ko = self._clean(ko)
         # 11/11: 앞 문장(맥락) 내용을 끌어다 붙여 번역이 원문보다 훨씬 길어질 때가 있다
         #   'Using Zoom Meetings and Zoom phone.' → '판매 팀이 비디오를 활용해 … Zoom Meetings와 Zoom Phone을 활용하고 있을 가능성이 높습니다.'
         # 한국어는 보통 영어보다 글자 수가 적다 → 영어의 0.9배+12자를 넘으면 맥락 없이 한 번 더 옮겨 짧은 쪽을 쓴다.
         if self.ctx and len(ko) > len(en) * 0.9 + 12:
-            ko2 = self._clean(self._call([{"role": "system", "content": system_prompt(self.topic)},
+            ko2 = self._clean(self._call([{"role": "system", "content": sysmsg},
                                           {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
             if ko2 and len(ko2) < len(ko):
                 ko = ko2
         # 11/12: 원문에 없는 'Zendesk' 를 넣었으면 (줌 Workvivo 강의 'Vivo isn't just a platform.' → 'Zendesk는…')
-        # 맥락·주제 없이 한 번 더 옮긴다
-        if re.search(r"zendesk|젠데스크|젠디스크", ko, re.I) and "zendesk" not in en.lower():
+        # 맥락·주제 없이 한 번 더 옮긴다. Zendesk 만이 아니라 원문에 없는 영어 이름은 다 (창 제목·용어집에서 끌어다 넣는 것 포함)
+        def bad(k):
+            return len(foreign_names(en, k)) + (1 if re.search(r"젠데스크|젠디스크", k) and "zendesk" not in en.lower() else 0)
+        if bad(ko):
             ko2 = self._clean(self._call([{"role": "system", "content": system_prompt("general")},
                                           {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
-            if ko2 and not re.search(r"zendesk|젠데스크|젠디스크", ko2, re.I):
+            if ko2 and bad(ko2) < bad(ko):
                 ko = ko2
         ko = restore_names(en, ko)
         self.last_sec = time.time() - t
