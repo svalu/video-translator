@@ -162,9 +162,11 @@ class Overlay:
         w = self.w
         size = int(self.cfg.get("overlay_size", 22))
         ring = max(1, round(size / 14))
-        y = self._text(w // 2, 12, self.ko_text or "…", self.f_ko, self.ink, w - 40, ring)
+        # 11/12: 영어(지금 들리는 말)를 위에, 한국어를 아래에. 아랫변이 고정이라 영어 줄이 늘어도 한국어는 제자리
+        y = 8
         if self.cfg.get("overlay_en", True) and self.en_text:
-            y = self._text(w // 2, y + 4, self.en_text, self.f_en, self.ink_en, w - 40, 1)
+            y = self._text(w // 2, 12, self.en_text, self.f_en, self.ink_en, w - 40, 1)
+        y = self._text(w // 2, y + 4, self.ko_text or "…", self.f_ko, self.ink, w - 40, ring)
         cv.configure(width=w, height=y + 12)
         self._sync()
 
@@ -249,11 +251,12 @@ class Overlay:
                 if want:
                     self._sync(force=True)
             ko = s.get("speaking") or (s["recent"][0]["ko"] if s.get("recent") else "")
-            en = s["recent"][0]["en"] if s.get("speaking") and s.get("recent") else ""
+            # 11/12: 영어는 들리는 대로 바로(번역·읽기를 기다리지 않고), 한국어는 읽을 차례가 되면
+            en = s.get("hearing") or (s["recent"][0]["en"] if s.get("speaking") and s.get("recent") else "")
             if not s.get("running"):
                 ko, en = "읽기를 멈췄어", ""
-            if ko != self.last_text:  # (11/06: 한동안 새 문장이 없을 때 흐리게 하던 건 뺐다 — 흐려 보인다고 해서)
-                self.last_text, self.last_change = ko, time.time()
+            if (ko, en) != self.last_text:  # (11/06: 한동안 새 문장이 없을 때 흐리게 하던 건 뺐다 — 흐려 보인다고 해서)
+                self.last_text, self.last_change = (ko, en), time.time()
                 self.ko_text, self.en_text = ko, en
                 self._draw()
             if self.shown:

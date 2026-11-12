@@ -217,6 +217,15 @@ class EdgeVoice:
         return time.time() - t
 
 
+def _tail(text, limit=150):
+    """자막 줄에 띄울 '지금 들리는 영어': 끝에서 limit 자까지, 낱말 중간에서 자르지 않는다."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[-limit:]
+    return "… " + cut[cut.find(" ") + 1:]
+
+
 class Reader:
     def __init__(self):
         self.settings = dict(DEFAULTS)
@@ -226,6 +235,7 @@ class Reader:
         self.status = "대기 중"
         self.current = {"en": "", "ko": ""}
         self.now_speaking = ""
+        self.hearing = ""  # 11/12: 지금 들리는 영어 (자막 줄에 번역보다 먼저 띄운다)
         self.recent = deque(maxlen=8)
         self.stats = {"spoken": 0, "dups": 0, "frags": 0, "skipped": 0, "lat_sum": 0.0}
         self.voice_names = []
@@ -273,6 +283,7 @@ class Reader:
             self._stop.set()
             self.status = "멈춤"
             self.current = {"en": "", "ko": ""}  # 11/11: 멈추면 '지금 읽는 문장'도 비운다
+            self.hearing = ""
             while not self._q.empty():
                 self._q.get_nowait()
             if self._log_file:
@@ -323,6 +334,7 @@ class Reader:
                 "status": self.status,
                 "current": dict(self.current),
                 "speaking": self.now_speaking,
+                "hearing": self.hearing,
                 "recent": list(self.recent),
                 "stats": {**{k: s[k] for k in ("spoken", "dups", "frags", "skipped")}, "avg_delay": round(avg, 1)},
                 "settings": dict(self.settings),
@@ -501,6 +513,8 @@ class Reader:
                     text = box.Name or ""
                     now = time.time()
                     lines = [l for l in text.splitlines() if l.strip()]
+                    if lines:
+                        self.hearing = _tail(lines[-1])
                     if lines and not self.now_speaking:
                         self.current = {"en": lines[-1], "ko": self.current.get("ko", "")}
                     for en, born in seg.feed(text, now):
@@ -603,6 +617,7 @@ class Reader:
             jobs.put((time.time(), en, born))
 
         def on_text(t):
+            self.hearing = _tail(t)
             if not self.now_speaking:
                 self.current = {"en": t, "ko": self.current.get("ko", "")}
 
@@ -730,3 +745,4 @@ class Reader:
                 self._last_speak_end = time.time()
                 with self.lock:
                     self.now_speaking = ""
+        self.hearing = ""  # 11/12: 지금 들리는 영어 (자막 줄에 번역보다 먼저 띄운다)
