@@ -60,7 +60,9 @@ def system_prompt(topic):
 def guess_topic(sentences, prev="zendesk"):
     """최근 영어 문장에 나온 제품 이름으로 강의 주제를 고른다. 둘 다 안 나오면 하던 대로."""
     text = " ".join(sentences).lower()
-    zd, zm = text.count("zendesk"), len(re.findall(r"\bzoom\b", text))
+    zd = len(re.findall(r"zendesk|zenda desk", text))
+    # 11/12: Workvivo 강의는 'Zoom' 을 거의 안 말한다 → 줌 제품 이름도 센다 (자막은 Workvivo 를 'Vivo'·'Work Vivo' 로 적는다)
+    zm = len(re.findall(r"\bzoom\b|\b(?:work ?)?vivo\b|ai companion", text))
     if zm > zd:
         return "zoom"
     if zd > zm:
@@ -331,6 +333,7 @@ _CAPTION_FIX = [
     (re.compile(r"\bE-?12(?=\b|zendesk|\.)", re.I), "Eatwell"),   # Eatwell(데모용 가상 음식 배달 회사)을 E12 로
     (re.compile(r"\bEat well\b", re.I), "Eatwell"),
     (re.compile(r"\bZenda? ?Desk\b", re.I), "Zendesk"),
+    (re.compile(r"\b(?:Work ?)?Vivo\b", re.I), "Workvivo"),   # 줌 강의에서만 (11/12 'Vivo isn't just a platform.')
 ]
 
 
@@ -366,6 +369,8 @@ def fix_caption(en, topic="zendesk"):
     for pat, rep in _CAPTION_FIX:
         if rep == "Eatwell" and topic != "zendesk":
             continue  # Eatwell 은 Zendesk 데모 회사 — 다른 강의의 'E12' 는 건드리지 않는다
+        if rep == "Workvivo" and topic != "zoom":
+            continue
         en = pat.sub(rep, en)
     return en
 
@@ -377,7 +382,7 @@ class LocalTranslator:
         self.model = model
         self.ctx = []
         self.seen_en = []      # 강의 주제를 고르려고 최근 영어 문장을 모아 둔다
-        self.topic = "zendesk"
+        self.topic = "general"  # 11/12: 처음부터 Zendesk 로 잡으면 아직 이름이 안 나온 줌 강의에 'Zendesk' 를 넣는다
         self.last_sec = 0.0
 
     def _call(self, messages, keep="30m", num_predict=200):
@@ -445,6 +450,13 @@ class LocalTranslator:
             ko2 = self._clean(self._call([{"role": "system", "content": system_prompt(self.topic)},
                                           {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
             if ko2 and len(ko2) < len(ko):
+                ko = ko2
+        # 11/12: 원문에 없는 'Zendesk' 를 넣었으면 (줌 Workvivo 강의 'Vivo isn't just a platform.' → 'Zendesk는…')
+        # 맥락·주제 없이 한 번 더 옮긴다
+        if re.search(r"zendesk|젠데스크|젠디스크", ko, re.I) and "zendesk" not in en.lower():
+            ko2 = self._clean(self._call([{"role": "system", "content": system_prompt("general")},
+                                          {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
+            if ko2 and not re.search(r"zendesk|젠데스크|젠디스크", ko2, re.I):
                 ko = ko2
         ko = restore_names(en, ko)
         self.last_sec = time.time() - t

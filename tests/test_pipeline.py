@@ -160,6 +160,12 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(lp.guess_topic(["Open the ticket in Zendesk."], "zoom"), "zendesk")
         self.assertEqual(lp.guess_topic(["Wouldn't that be frustrating?"], "zoom"), "zoom")  # 안 나오면 하던 대로
         self.assertNotIn("Zendesk", lp.system_prompt("zoom"))
+        # 11/12: Workvivo 강의는 Zoom 을 안 말해도 줌 강의로 (자막은 'Vivo' 로 적는다)
+        self.assertEqual(lp.guess_topic(["Vivo isn't just a platform."], "general"), "zoom")
+        self.assertEqual(lp.fix_caption("Vivo isn't just a platform.", "zoom"), "Workvivo isn't just a platform.")
+        self.assertEqual(lp.fix_caption("Work Vivo helps.", "zoom"), "Workvivo helps.")
+        self.assertEqual(lp.fix_caption("Viva la vivo", "zendesk"), "Viva la vivo")
+        self.assertNotIn("Zendesk", lp.system_prompt("general"))
 
     def test_restore_names(self):
         """한글로 바뀐 제품 이름을 되돌린다 (v0.5.1). 원문에 있을 때만."""
