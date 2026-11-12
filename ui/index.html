@@ -90,6 +90,13 @@ kbd { font: 600 11px var(--font); color: var(--ink-2); background: var(--panel-2
 .now .label { color: #a6abb8; }
 .now .ko { font-size: 19px; font-weight: 700; line-height: 1.45; }
 .now .en { font-size: 12.5px; color: #a6abb8; }
+/* 11/12: 이 강의에서 저절로 잡은 것 (주제·이름). 이름은 ✕ 로 뺄 수 있다 */
+.lesson { margin-top: auto; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.12); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: #a6abb8; }
+.lesson .what { flex: 1 1 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lesson .what b { color: #e6e8ee; font-weight: 600; }
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 9px; border-radius: 999px; background: rgba(255,255,255,.1); color: #e6e8ee; font: 500 12px var(--font); }
+.chip button { width: 18px; height: 18px; border: 0; border-radius: 50%; background: transparent; color: #a6abb8; font: 600 12px var(--font); line-height: 1; cursor: pointer; padding: 0; }
+.chip button:hover, .chip button:focus-visible { background: rgba(255,255,255,.18); color: #fff; }
 .speaking-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); display: inline-block; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .speaking-dot { animation: none; } }
@@ -200,6 +207,7 @@ select { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(-
     <div class="row between"><span class="label">지금 읽는 문장</span><span id="spk"></span></div>
     <div class="ko" id="nowKo">영상을 켜고 '읽기 시작'을 눌러.</div>
     <div class="en" id="nowEn"></div>
+    <div class="lesson" id="lesson" hidden></div>
   </section>
 
   <section class="stats">
@@ -389,8 +397,36 @@ function renderLoad(ld) {
   }
 }
 
+let lessonKey = "";
+function renderLesson(l) {
+  const box = $("lesson");
+  const key = l ? JSON.stringify(l) : "";
+  if (key === lessonKey) return;   // 바뀔 때만 다시 그린다 (누르려는 ✕ 가 0.6초마다 새로 그려지지 않게)
+  lessonKey = key;
+  box.hidden = !l;
+  box.textContent = "";
+  if (!l) return;
+  const topic = { zendesk: "Zendesk 강의", zoom: "Zoom 강의" }[l.topic] || "일반 강의";
+  const what = document.createElement("div"); what.className = "what";
+  const b = document.createElement("b"); b.textContent = topic; what.appendChild(b);
+  if (l.title) { what.appendChild(document.createTextNode(" · " + l.title)); what.title = l.title; }
+  box.appendChild(what);
+  if (!l.names.length) {
+    const none = document.createElement("span"); none.textContent = "두 번 넘게 들린 이름이 여기 모여 (영어 그대로 옮김)";
+    box.appendChild(none);
+  }
+  l.names.forEach(n => {
+    const c = document.createElement("span"); c.className = "chip"; c.textContent = n;
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "✕";
+    x.title = x.ariaLabel = `'${n}' 빼기 — 이름이 아니면 눌러 (다시 한국어로 옮겨)`;
+    x.onclick = () => api("/api/term-drop", { name: n });
+    c.appendChild(x); box.appendChild(c);
+  });
+}
+
 function render(s) {
   state = s;
+  renderLesson(s.lesson);
   renderLoad(s.running ? s.loading : null);
   // 상태 줄: "듣는 중 · Whisper(GPU) · 헤드폰(…)" → 굵게 '듣는 중' + 회색 나머지 (길면 … , 문제 안내는 두 줄까지)
   const st = $("status");

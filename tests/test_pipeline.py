@@ -188,6 +188,12 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(b.sub("", "ZSA - Workvivo 2026 - Google Chrome"), "ZSA - Workvivo 2026")
         self.assertEqual(b.sub("", "Course - 프로필 1 - Microsoft Edge"), "Course")
         self.assertIsNone(b.search("동영상 동시 통역기"))
+        tr = lp.LocalTranslator("x")
+        tr.names = {"Workvivo": 3, "Activity Feed": 2, "Once": 1}
+        self.assertEqual(tr.auto_terms(), ["Workvivo", "Activity Feed"])
+        tr.banned.add("Activity Feed")                                          # 앱 창에서 ✕
+        self.assertEqual(tr.lesson(), {"topic": "general", "title": "", "names": ["Workvivo"]})
+        self.assertEqual(lp.LocalTranslator._clean("**Workvivo**는 `플랫폼`입니다."), "Workvivo는 플랫폼입니다.")
 
     def test_restore_names(self):
         """한글로 바뀐 제품 이름을 되돌린다 (v0.5.1). 원문에 있을 때만."""

@@ -322,6 +322,21 @@ class Reader:
             except OSError:
                 pass
 
+    def _lesson(self):
+        tr = getattr(self, "_translator", None)
+        if not (self.running and tr):
+            return None
+        try:
+            return tr.lesson()
+        except Exception:
+            return None
+
+    def drop_term(self, name):
+        """자동으로 잡은 이름을 뺀다 (잘못 잡았을 때). 이 강의 동안만."""
+        tr = getattr(self, "_translator", None)
+        if tr and name:
+            tr.banned.add(str(name))
+
     def test_voice(self):
         self._tasks.put("test")
 
@@ -335,6 +350,7 @@ class Reader:
                 "current": dict(self.current),
                 "speaking": self.now_speaking,
                 "hearing": self.hearing,
+                "lesson": self._lesson(),
                 "recent": list(self.recent),
                 "stats": {**{k: s[k] for k in ("spoken", "dups", "frags", "skipped")}, "avg_delay": round(avg, 1)},
                 "settings": dict(self.settings),

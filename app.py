@@ -72,6 +72,8 @@ class Handler(BaseHTTPRequestHandler):
             reader.stop()
         elif self.path == "/api/settings":
             reader.update(data)
+        elif self.path == "/api/term-drop":
+            reader.drop_term(data.get("name"))
         elif self.path == "/api/test-voice":
             reader.test_voice()
         elif self.path == "/api/setup/start":

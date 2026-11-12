@@ -491,6 +491,7 @@ class LocalTranslator:
         self.ctx = []
         self.seen_en = []      # 강의 주제를 고르려고 최근 영어 문장을 모아 둔다
         self.names = {}        # 들린 이름 → 횟수 (11/12)
+        self.banned = set()    # 앱 창에서 ✕ 로 뺀 이름 (이 강의 동안)
         self.title = ""        # 브라우저 창 제목
         self.use_title = True
         self.topic = "general"  # 11/12: 처음부터 Zendesk 로 잡으면 아직 이름이 안 나온 줌 강의에 'Zendesk' 를 넣는다
@@ -508,8 +509,12 @@ class LocalTranslator:
 
     def auto_terms(self, limit=15):
         """두 번 넘게 들린 이름, 많이 들린 순으로."""
-        got = sorted((n for n, c in self.names.items() if c >= 2), key=lambda n: -self.names[n])
+        got = sorted((n for n, c in self.names.items() if c >= 2 and n not in self.banned), key=lambda n: -self.names[n])
         return got[:limit]
+
+    def lesson(self):
+        """앱 창에 보여 줄 것: 지금 잡힌 주제·창 제목·잡은 이름."""
+        return {"topic": self.topic, "title": self.title, "names": self.auto_terms()}
 
     def warm(self):
         """모델을 그래픽 메모리에 올려 둔다 (첫 문장이 늦지 않게). 실패하면 예외."""
@@ -542,6 +547,8 @@ class LocalTranslator:
     @staticmethod
     def _clean(ko):
         ko = ko.strip().strip('"“”').strip()
+        # 11/12: 모델이 강조한다고 **낱말** 처럼 별표를 붙일 때가 있다(마크다운 굵은 글씨 표시). 자막엔 별표째 나온다 → 뗀다
+        ko = re.sub(r"\*+|`+|(?<![A-Za-z0-9])__(?=\S)|(?<=\S)__(?![A-Za-z0-9])", "", ko).strip()
         if ko.startswith("- "):
             ko = ko[2:].strip()  # "- 어떻게…" 처럼 '-' 를 앞에 붙여 답할 때가 있다
         return strip_notes(strip_meta(ko))
