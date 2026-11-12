@@ -508,6 +508,7 @@ class Reader:
                 pass
             out_dev, next_dev_check = _default_output_name(), time.time() + 5
             silent_hits, last_wd = 0, 0.0  # last_wd: 소리 감시로 마지막에 다시 켠 때
+            stale_hits, prev_text = 0, None  # 11/12: 글자가 남은 채 멈춘 것 감시
             while not self._stop.is_set():
                 try:
                     text = box.Name or ""
@@ -541,13 +542,26 @@ class Reader:
                         # 11/11: 블루투스 헤드폰이 끊겼다 다시 붙으면 장치 이름이 같아서 위에서 못 알아챈다.
                         # 실시간 자막은 예전 장치를 붙잡고 '준비 완료'에서 멈춰 있었다(소리는 헤드폰으로 잘 나옴).
                         # → 자막 칸이 비어 있는데 소리는 나고 있으면, 두 번(10초) 연달아 그럴 때 실시간 자막을 껐다 켠다.
-                        if not text.strip() and _output_has_sound():
+                        sound = _output_has_sound() if (not text.strip() or text == prev_text) else False
+                        if not text.strip() and sound:
                             silent_hits += 1
                         else:
                             silent_hits = 0
-                        if silent_hits >= 2 and now - last_wd > 60:  # 음악만 나오는 구간에서 계속 껐다 켜지 않게 1분 쉼
-                            silent_hits, last_wd = 0, now
-                            self.status = "실시간 자막 다시 켜는 중 · 소리는 나는데 자막이 안 나와서"
+                        # 11/12: 자막 칸에 예전 글자가 남은 채 새 글자만 안 올라오는 때가 있었다 (15:01:51~15:02:42, 51초 빔).
+                        # 위 감시는 '칸이 비었을 때'만 봐서 못 잡는다 → 소리는 나는데 글자가 그대로인 게 네 번(20초) 이어지면 다시 켠다.
+                        # 음악만 나오는 구간에서 자꾸 껐다 켜지 않게 이쪽은 3분 쉰다.
+                        if text.strip() and text == prev_text and sound:
+                            stale_hits += 1
+                        else:
+                            stale_hits = 0
+                        prev_text = text
+                        stuck = stale_hits >= 4 and now - last_wd > 180
+                        if (silent_hits >= 2 and now - last_wd > 60) or stuck:  # 음악만 나오는 구간에서 계속 껐다 켜지 않게 1분 쉼
+                            silent_hits, stale_hits, last_wd = 0, 0, now
+                            self.status = ("실시간 자막 다시 켜는 중 · 소리는 나는데 자막이 멈춰서" if stuck
+                                           else "실시간 자막 다시 켜는 중 · 소리는 나는데 자막이 안 나와서")
+                            self._write([datetime.now().strftime("%H:%M:%S"), "", "자막 다시 켬", "멈춤" if stuck else "빈 칸", "", ""])
+                            prev_text = None
                             restart_live_captions()
                             box = self._find_box_hard()
                             if box is None:
