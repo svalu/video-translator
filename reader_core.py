@@ -188,7 +188,8 @@ class EdgeVoice:
         name = voice_id.split(":", 1)[1]
         path = os.path.join(self.dir, f"{uuid.uuid4().hex}.mp3")
         t = time.time()
-        asyncio.run(edge_tts.Communicate(text, name, rate=self._rate_str(rate)).save(path))
+        # 11/13: 서버가 대답을 안 하면 수십 초를 붙잡고 있었다(한 문장에 55초) → 6초 안에 못 받으면 그만둔다
+        asyncio.run(asyncio.wait_for(edge_tts.Communicate(text, name, rate=self._rate_str(rate)).save(path), timeout=6))
         self.last_synth = time.time() - t
         return path
 
@@ -200,7 +201,7 @@ class EdgeVoice:
     def say(self, text, voice_id, rate, volume, speed=1.0):
         """speed: 미리 받아 둔 mp3 를 더 빨리 틀 때 (1.0 = 그대로, 최대 1.3). 다시 합성하지 않아도 되게."""
         fut = self._pre.pop((text, voice_id, rate), None)
-        path = fut.result(timeout=20) if fut else self._synth(text, voice_id, rate)
+        path = fut.result(timeout=8) if fut else self._synth(text, voice_id, rate)
         t = time.time()
         try:
             self._mci(f'open "{path}" type mpegvideo alias tts', None, 0, None)
@@ -684,14 +685,24 @@ class Reader:
                 err = None
                 # 11/13: 한 번 실패하면 곧바로 윈도우 Heami 로 바꿔 읽어서 목소리가 중간에 다른 사람으로 바뀌었다 (희랑: "화자 구분한 줄").
                 # → 한 번 더 해 보고, 그래도 안 될 때만 바꾼다. 바꿔 읽은 건 기록에 남긴다.
-                for _ in range(2):
-                    try:
-                        return edge.say(text, vid, base, volume, speed=rate / base)
-                    except Exception as e:
-                        err = e
-                        time.sleep(0.4)  # 서버가 연결을 거절한 직후(WSServerHandshakeError)엔 잠깐 쉬고
-                self.status = f"Edge 목소리 실패({type(err).__name__}) → 윈도우 목소리로 대신 읽는 중"
-                self._write([datetime.now().strftime("%H:%M:%S"), "", "목소리 대체", type(err).__name__, text[:40], ""])
+                # 11/13 (2): 11:10 에 두 번 다 실패했는데 그때까지 55초를 붙잡고 있어서 뒤 문장이 다 1분씩 밀렸다.
+                # → 금방(2초 안에) 거절당했을 때만 한 번 더 해 보고, 오래 걸려 실패했으면 바로 바꾼다.
+                #   바꾼 뒤 20초는 Edge 를 다시 찔러 보지 않는다 (문장마다 기다리지 않게, 목소리가 문장마다 왔다 갔다 하지 않게).
+                t0 = time.time()
+                if t0 >= getattr(self, "_edge_down", 0.0):
+                    for attempt in range(2):
+                        t1 = time.time()
+                        try:
+                            return edge.say(text, vid, base, volume, speed=rate / base)
+                        except Exception as e:
+                            err = e
+                            if time.time() - t1 > 2:
+                                break
+                            time.sleep(0.4)
+                    self._edge_down = time.time() + 20
+                    self.status = f"Edge 목소리 실패({type(err).__name__}) → 윈도우 목소리로 대신 읽는 중"
+                    self._write([datetime.now().strftime("%H:%M:%S"), "", "목소리 대체",
+                                 f"{type(err).__name__} {time.time() - t0:.1f}초 {str(err)[:80]}", text[:40], ""])
                 vid = "sapi:Heami"
             sapi.use(vid)
             return sapi.say(text, rate, volume)
