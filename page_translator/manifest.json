@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "페이지 통째 번역 (희랑)",
   "short_name": "통째 번역",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "버튼을 누르면 지금 페이지의 영어를 한국어로 바꿉니다. 페이지 안에 끼워 넣은 다른 사이트 창(강의 재생기)까지 번역합니다.",
   "icons": { "128": "icon128.png" },
   "action": { "default_title": "이 페이지를 한국어로 (Alt+T) · 다시 누르면 원래대로", "default_icon": { "128": "icon128.png" } },

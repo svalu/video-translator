@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SVG 글자 겹침 시험</title>
+<!-- 확장기 없이 content.js 만 불러서, 글자마다 자리를 준 SVG 글이 한국어로 바뀔 때 겹치는지 본다 -->
+<body style="font-family:sans-serif">
+<p>위: 글자마다 x 자리 · 가운데: textLength · 아래: letter-spacing + dx</p>
+<svg width="900" height="220" style="background:#eef">
+  <text font-size="26" fill="#135"><tspan id="a" y="40"
+    x="20 36 50 63 70 84 98 111 118 125 139 152 166 173 187 194 201 215 229 236 250 264 277 284 298 305 319 332 346 353 367 380 394">Use your mouse to navigate around</tspan></text>
+  <text id="b" font-size="26" fill="#135" x="20" y="110" textLength="330" lengthAdjust="spacingAndGlyphs">You must complete all six quizzes here</text>
+  <text font-size="26" fill="#135" x="20" y="180" style="letter-spacing:-3px"><tspan id="c" dx="0 -2 -2 -2 -2 -2 -2 -2 -2 -2">Enjoy and good luck everyone</tspan></text>
+</svg>
+<script>
+  const KO = { "Use your mouse to navigate around": "마우스를 사용하여 주변을 탐색하세요",
+               "You must complete all six quizzes here": "여기서 6개의 퀴즈를 모두 풀어야 합니다",
+               "Enjoy and good luck everyone": "즐겁게 하시고 모두 행운을 빕니다" };
+  window.chrome = window.chrome || {};
+  window.chrome.runtime = { sendMessage: async (m) => ({ ko: m.texts.map((t) => KO[t] || "") }) };
+</script>
+<script src="content.js"></script>
+<button onclick="__heerangPT.set(true)">번역 켜기</button>
+<button onclick="__heerangPT.set(false)">끄기</button>
+</body>

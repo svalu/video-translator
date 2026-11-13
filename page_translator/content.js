@@ -9,6 +9,39 @@
   const translated = new Map(); // 글자 노드 → 우리가 넣은 한국어 (우리가 바꾼 걸 다시 번역하지 않게)
   let on = false, observer = null, timer = 0, busy = false, again = false;
 
+  // 11/13: 강의 재생기(줌 평가 화면)는 글을 그림(SVG)으로 그리면서 영어 글자 하나하나의 자리를 정해 둔다
+  // (x="10 18 25 …", textLength, letter-spacing). 한국어로 바꾸면 한글이 그 좁은 자리에 놓여 서로 겹쳤다.
+  // → 글을 바꾸는 줄은 '줄이 시작하는 자리'만 남기고 글자별 자리는 푼다. 끄면 되돌린다.
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const svgSaved = new Map();   // SVG 글 요소 → 원래 속성들
+  function loosen(el) {
+    for (let e = el; e && e.namespaceURI === SVG_NS && /^(text|tspan|textPath)$/.test(e.localName); e = e.parentElement) {
+      if (!svgSaved.has(e)) {
+        const keep = {};
+        for (const a of ["x", "y", "dx", "dy"]) {          // 값이 여러 개면 글자마다 준 자리 → 첫 값만
+          const v = e.getAttribute(a);
+          if (v && /[\s,]/.test(v.trim())) { keep[a] = v; e.setAttribute(a, v.trim().split(/[\s,]+/)[0]); }
+        }
+        for (const a of ["rotate", "textLength", "lengthAdjust"]) {
+          if (e.hasAttribute(a)) { keep[a] = e.getAttribute(a); e.removeAttribute(a); }
+        }
+        keep.style = e.getAttribute("style");
+        e.style.letterSpacing = "normal";
+        e.style.wordSpacing = "normal";
+        svgSaved.set(e, keep);
+      }
+      if (e.localName === "text") break;
+    }
+  }
+  function tighten() {
+    svgSaved.forEach((keep, e) => {
+      for (const a in keep) {
+        if (keep[a] === null) e.removeAttribute(a); else e.setAttribute(a, keep[a]);
+      }
+    });
+    svgSaved.clear();
+  }
+
   // 번역할 만한 글인가: 영어 글자가 2자 이상 있고, 한글이 이미 절반 넘지 않는 것
   function worth(s) {
     const t = s.trim();
@@ -50,6 +83,7 @@
             // 앞뒤 빈칸은 그대로 둔다 (낱말 사이가 붙지 않게)
             const out = (src.match(/^\s*/) || [""])[0] + ko + (src.match(/\s*$/) || [""])[0];
             translated.set(n, out);
+            if (n.parentElement && n.parentElement.namespaceURI === SVG_NS) loosen(n.parentElement);
             n.nodeValue = out;
           });
         }
@@ -81,6 +115,7 @@
     if (observer) observer.disconnect();
     original.forEach((src, n) => { if (n.isConnected && translated.get(n) === n.nodeValue) n.nodeValue = src; });
     original.clear(); translated.clear();
+    tighten();
   }
 
   window.__heerangPT = { set: (v) => { if (v && !on) start(); else if (!v && on) stop(); } };
