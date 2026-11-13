@@ -680,12 +680,19 @@ class Reader:
             Edge 는 평소 빠르기(base_rate)로 미리 받아 둔 mp3 를 쓰고, 더 빨리 읽어야 하면 재생 속도로 맞춘다."""
             vid = self.settings["voice"]
             if vid.startswith("edge:"):
-                try:
-                    base = self.settings["base_rate"]
-                    return edge.say(text, vid, base, volume, speed=rate / base)
-                except Exception as e:
-                    self.status = f"Edge 목소리 실패({type(e).__name__}) → 윈도우 목소리로 대신 읽는 중"
-                    vid = "sapi:Heami"
+                base = self.settings["base_rate"]
+                err = None
+                # 11/13: 한 번 실패하면 곧바로 윈도우 Heami 로 바꿔 읽어서 목소리가 중간에 다른 사람으로 바뀌었다 (희랑: "화자 구분한 줄").
+                # → 한 번 더 해 보고, 그래도 안 될 때만 바꾼다. 바꿔 읽은 건 기록에 남긴다.
+                for _ in range(2):
+                    try:
+                        return edge.say(text, vid, base, volume, speed=rate / base)
+                    except Exception as e:
+                        err = e
+                        time.sleep(0.4)  # 서버가 연결을 거절한 직후(WSServerHandshakeError)엔 잠깐 쉬고
+                self.status = f"Edge 목소리 실패({type(err).__name__}) → 윈도우 목소리로 대신 읽는 중"
+                self._write([datetime.now().strftime("%H:%M:%S"), "", "목소리 대체", type(err).__name__, text[:40], ""])
+                vid = "sapi:Heami"
             sapi.use(vid)
             return sapi.say(text, rate, volume)
 

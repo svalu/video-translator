@@ -195,6 +195,21 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(tr.lesson(), {"topic": "general", "title": "", "names": ["Workvivo"]})
         self.assertEqual(lp.LocalTranslator._clean("**Workvivo**는 `플랫폼`입니다."), "Workvivo는 플랫폼입니다.")
 
+    def test_caption_fragments(self):
+        """v0.5.8: 자막이 고쳐 쓰는 도중의 조각은 읽지 않는다."""
+        seg = lp.CaptionSegmenter()
+        got = [e for e, _ in seg._emit("Zoom has a strong history of audio technology for over a decade.", 0, 0)]
+        self.assertEqual(len(got), 1)
+        self.assertEqual(seg._emit("For over a decade.", 1, 1), [])                 # 앞 문장 끝을 되풀이
+        self.assertEqual(seg._emit("The year that.", 2, 2), [])                     # 짧아서 붙여 둠
+        self.assertEqual(seg._emit("Are integral to your.", 3, 3), [])              # 소유격으로 끝난 조각 → 붙여 둔 것도 버림
+        self.assertIsNone(seg.carry)
+        self.assertEqual(seg._emit("She wants to be a.", 4, 4), [])
+        self.assertEqual([e for e, _ in seg._emit("I'm glad to hear that.", 5, 5)], ["I'm glad to hear that."])
+        self.assertEqual([e for e, _ in seg._emit("It could be a deal breaker for us.", 6, 6)], ["It could be a deal breaker for us."])
+        long = "Our Zoom Phone inherits the same reliable technology that has been integral to the success of."
+        self.assertEqual([e for e, _ in seg._emit(long, 7, 7)], [long])            # 긴 문장은 끝이 끊겨도 읽는다
+
     def test_restore_names(self):
         """한글로 바뀐 제품 이름을 되돌린다 (v0.5.1). 원문에 있을 때만."""
         r = lp.restore_names

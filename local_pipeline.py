@@ -292,6 +292,7 @@ class CaptionSegmenter:
 
     STABLE = 0.6      # 뒤에 다음 문장이 붙은 문장: 이만큼 안 바뀌면 끝
     LAST_STABLE = 1.2 # 마지막 문장: 마침표로 끝나고 이만큼 안 바뀌면 끝
+    LAST_STABLE_SHORT = 2.5  # 마지막 문장이 네 낱말 이하면 이만큼 (11/13)
     MIN_WORDS = 4     # 이보다 짧으면 다음 문장 앞에 붙인다 ("So.", "And then.")
     CARRY_MAX = 4.0   # 짧은 문장을 붙일 다음 문장이 이 안에 안 오면 버림 (추임새)
 
@@ -302,6 +303,21 @@ class CaptionSegmenter:
         self.last_key = None  # 마지막으로 내보낸(또는 읽은 걸로 친) 문장 — 자막 칸에서 이 뒤에 붙는 문장이 새 문장
         self.new_born = []    # 기준 뒤 새 문장들이 처음 나타난 시각 (차례대로). 되감기 때 옛 문장의 시각을 안 쓰게
         self.carry = None     # (짧은 문장, 시각, 처음 들린 시각)
+        self.prev_out = ""    # 바로 앞에 내보낸 문장 (정규화) — 그 끝을 되풀이한 조각을 거른다
+
+    # 11/13: 실시간 자막이 문장을 고쳐 쓰는 도중의 조각이 그대로 읽혔다.
+    #   '…for over a decade.' 다음에 'For over a decade.' 가 또 / 'Are integral to your.' / 'She wants to be a.'
+    # 관사·소유격·접속사로 끝난 짧은 문장은 말이 끊긴 조각이다 (뒤에 올 낱말이 없다).
+    DANGLING = set("a an the your our their my its and or of to be".split())
+
+    def _fragment(self, s):
+        words = s.split()
+        if len(words) > 6:
+            return False
+        k = norm(s)
+        if len(words) <= 5 and len(k) >= 6 and self.prev_out.endswith(k):
+            return True   # 앞 문장의 끝을 되풀이
+        return s.endswith(".") and words[-1].strip(".,").lower() in self.DANGLING
 
     def prime(self, text):
         """시작할 때 이미 자막 칸에 있던 문장은 읽은 걸로 친다.
@@ -377,7 +393,9 @@ class CaptionSegmenter:
                 continue               # 기준 문장까지는 이미 읽음
             last = i == len(sents) - 1
             age = now - self.seen[x]
-            ok = (x.endswith((".", "?", "!")) and age >= self.LAST_STABLE) if last else age >= self.STABLE
+            # 짧은 마지막 문장은 더 기다린다 — 'For over a decade.' 가 곧 'For over a decade, our Zoom Phone…' 으로 늘어난다
+            hold = self.LAST_STABLE if len(x.split()) > 4 else self.LAST_STABLE_SHORT
+            ok = (x.endswith((".", "?", "!")) and age >= hold) if last else age >= self.STABLE
             if not ok:
                 break                  # 차례대로만 내보낸다 (뒤 문장이 먼저 나가면 앞 문장이 기준 앞으로 밀려 안 읽힘)
             born = b[0]
@@ -402,6 +420,15 @@ class CaptionSegmenter:
         # → 한 단어짜리는 버린다. 다음 문장이 붙여 둔 말로 시작하면('Let's dive. Let's dive Your team…') 붙이지 않는다.
         if len(s.split()) == 1 and not self.carry:
             return []
+        if self._fragment(s):
+            self.carry = None   # 조각 앞에 붙여 두려던 말도 같은 찌꺼기다 ('The year that.' + 'Are integral to your.')
+            return []
+        out = self._emit2(s, now, born)
+        if out:
+            self.prev_out = norm(out[-1][0])
+        return out
+
+    def _emit2(self, s, now, born):
         if self.carry and norm(s).startswith(norm(self.carry[0])):
             self.carry = None
         if len(s.split()) < self.MIN_WORDS:
