@@ -1,7 +1,8 @@
 """업데이트.bat 이 부른다: 패키지 맞추기 → 떠 있는 앱 끄기 → exe 빌드(바로가기 포함) → 새 exe 켜기.
 
-코드로 쓰는 PC(11/11 회사 PC: 보안 프로그램이 새로 만든 exe 를 바로 격리한다)는 빌드 없이
-'떠 있는 코드 앱 끄기 → 다시 켜기'만 한다. 코드 앱(pythonw app.py)이 떠 있거나 '코드로_쓰기' 파일이 있으면 코드 모드.
+11/13 부터 어느 PC 든 기본은 코드 모드: 빌드 없이 '떠 있는 코드 앱 끄기 → 바로가기 맞추기 → 다시 켜기'.
+(회사 PC 는 보안 프로그램이 새로 만든 exe 를 격리하고, 희랑이 "집이든 회사든 같은 환경이 좋다"고 했다.)
+exe 가 꼭 필요한 PC 만 이 폴더에 'exe로_만들기' 파일(내용 없음, 깃에는 안 올라감)을 두면 예전처럼 빌드한다.
 
 bat 은 git pull 과 .venv 만들기만 하고(한글 없이 — cmd 코드페이지에 안 깨지게), 나머지는 여기서 한다.
 git pull 뒤에 불리니까 이 파일은 늘 최신판이다.
@@ -31,7 +32,24 @@ def _code_pids():
 
 
 def code_mode():
-    return os.path.exists(os.path.join(HERE, "코드로_쓰기")) or bool(_code_pids())
+    return not os.path.exists(os.path.join(HERE, "exe로_만들기"))
+
+
+def code_shortcut():
+    """바탕화면·시작 메뉴 '동영상 동시 통역기' 바로가기 → .venv 의 pythonw app.py (집 PC 에 exe 바로가기가 남아 있어도 덮어쓴다)."""
+    import base64
+    pyw = os.path.join(HERE, ".venv", "Scripts", "pythonw.exe")
+    app = os.path.join(HERE, "app.py")
+    ico = os.path.join(HERE, "ui", "brand", "app.ico")
+    ps = (
+        "$ws = New-Object -ComObject WScript.Shell; "
+        "foreach ($d in [Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs')) { "
+        "$l = $ws.CreateShortcut((Join-Path $d '동영상 동시 통역기.lnk')); "
+        f"$l.TargetPath = '{pyw}'; $l.Arguments = '\"{app}\"'; $l.WorkingDirectory = '{HERE}'; $l.IconLocation = '{ico}'; "
+        "$l.Description = '영어 영상·화면을 한국어로 (희랑)'; $l.Save() }"
+    )
+    subprocess.run(["powershell", "-NoProfile", "-EncodedCommand", base64.b64encode(ps.encode("utf-16-le")).decode()],
+                   check=False, capture_output=True, creationflags=NO_WINDOW)
 
 
 def kill_code_app():
@@ -59,7 +77,8 @@ def main():
         step(2, "떠 있는 동영상 동시 통역기(코드) 끄는 중")
         kill_code_app()
         time.sleep(1)
-        step(3, "코드로 쓰는 PC 라 exe 는 안 만들어 (git pull 로 이미 새 코드)")
+        step(3, "exe 는 안 만들어 (코드로 씀 — git pull 로 이미 새 코드) · 바탕화면 바로가기 맞추는 중")
+        code_shortcut()
         step(4, "새 동영상 동시 통역기 켜는 중")
         start_code_app()
         print()

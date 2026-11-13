@@ -13,8 +13,8 @@ settings.json
 cuda/
 .download/
 
-# 이 PC 는 exe 대신 코드로 쓴다는 표시 (update.py 가 빌드를 건너뜀)
-코드로_쓰기
+# 이 PC 에서만 exe 를 빌드하고 싶을 때 두는 표시 (11/13 부터 기본은 코드로 씀)
+exe로_만들기
 
 # 준비 단계가 지난번에 몇 초 걸렸나 (PC 마다 다름)
 load_times.json
