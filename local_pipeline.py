@@ -154,6 +154,18 @@ def fix_by_title(en, title):
     return re.sub(r"\b[A-Z][A-Za-z0-9]{3,}\b", swap, en)
 
 
+# 11/13: 자막이 잘못 받아 적은 문장('The total cost of India.')을 번역하지 않고 되물었다
+#   → '이해가 되지 않아요. 다시 말씀해 주시겠어요?'  (통역이 아니라 대화 상대처럼 대답한 것)
+_REPLY = re.compile(r"다시 (?:한 ?번 )?(?:말씀|설명)|이해(?:가|를)? ?(?:되지|하지|할 수) ?(?:않|못|없)|무슨 (?:말씀|뜻|의미)"
+                    r"|(?:문장|내용|질문)(?:이|을)? ?(?:불완전|불분명|이상|명확하지|파악하기)|도와드릴")
+_REPLY_OK = re.compile(r"understand|again|repeat|pardon|sorry|mean|clear|explain|help|confus|sense", re.I)
+
+
+def is_reply(en, ko):
+    """번역이 아니라 모델이 듣는 사람한테 한 대답인가 (원문에 그런 말이 없는데 되묻거나 못 알아듣겠다고 함)."""
+    return bool(_REPLY.search(ko)) and not _REPLY_OK.search(en)
+
+
 def foreign_names(en, ko):
     """번역에 들어갔는데 원문에는 없는 영어 이름 (대문자로 시작, 4자 이상). 모델이 지어낸 이름을 잡는다."""
     flat = re.sub(r"[^a-z0-9]", "", en.lower())
@@ -418,8 +430,8 @@ class CaptionSegmenter:
     def _emit(self, s, now, born):
         # 11/11: 실시간 자막이 고쳐 쓰다 남긴 한 단어('Crockett.', 'Benefit.')가 다음 문장 앞에 붙어 '크로켓, …'으로 번역됐다.
         # → 한 단어짜리는 버린다. 다음 문장이 붙여 둔 말로 시작하면('Let's dive. Let's dive Your team…') 붙이지 않는다.
-        if len(s.split()) == 1 and not self.carry:
-            return []
+        if len(s.split()) == 1:
+            return []   # 11/13: 붙여 둔 말이 있어도 한 단어는 안 붙인다 ('So you didn't.' + 'PPX.' 가 읽혔다)
         if self._fragment(s):
             self.carry = None   # 조각 앞에 붙여 두려던 말도 같은 찌꺼기다 ('The year that.' + 'Are integral to your.')
             return []
@@ -625,6 +637,11 @@ class LocalTranslator:
                                           {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
             if ko2 and bad(ko2) < bad(ko):
                 ko = ko2
+        if is_reply(en, ko):  # 번역 대신 대답했으면 맥락 없이 한 번 더, 그래도 대답이면 읽지 않는다
+            ko = self._clean(self._call([{"role": "system", "content": system_prompt("general")},
+                                         {"role": "user", "content": "옮길 문장:\n" + en}], num_predict=cap))
+            if is_reply(en, ko):
+                ko = ""
         ko = restore_names(en, ko)
         self.last_sec = time.time() - t
         self.ctx.append(en)

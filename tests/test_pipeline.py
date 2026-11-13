@@ -207,6 +207,12 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(seg._emit("She wants to be a.", 4, 4), [])
         self.assertEqual([e for e, _ in seg._emit("I'm glad to hear that.", 5, 5)], ["I'm glad to hear that."])
         self.assertEqual([e for e, _ in seg._emit("It could be a deal breaker for us.", 6, 6)], ["It could be a deal breaker for us."])
+        self.assertEqual(seg._emit("So you didn't.", 8, 8), [])
+        self.assertEqual(seg._emit("PPX.", 8.5, 8.5), [])                           # 한 단어는 붙이지도 않는다
+        self.assertTrue(lp.is_reply("The total cost of India.", "이해가 되지 않아요. 다시 말씀해 주시겠어요?"))
+        self.assertFalse(lp.is_reply("Sorry, could you repeat that?", "죄송하지만 다시 말씀해 주시겠어요?"))
+        self.assertFalse(lp.is_reply("The total cost of ownership is lower.", "총 소유 비용이 더 낮습니다."))
+        seg.carry = None
         long = "Our Zoom Phone inherits the same reliable technology that has been integral to the success of."
         self.assertEqual([e for e, _ in seg._emit(long, 7, 7)], [long])            # 긴 문장은 끝이 끊겨도 읽는다
 
