@@ -137,6 +137,48 @@ class SegmenterTest(unittest.TestCase):
         self.assertEqual(self.s.out, ["And then. We assign the ticket to the billing group."])
 
 
+class ExtendTest(unittest.TestCase):
+    """v0.5.12: 자막이 이미 내보낸 문장을 뒤로 늘리면 늘어난 부분도 읽는다."""
+
+    def setUp(self):
+        self.s = Scroll([OLD])
+        self.s.seg.prime(self.s.text())
+        self.addCleanup(self.s.close)
+
+    def test_extended_sentence_tail_is_read(self):
+        s = self.s
+        s.feed(1)
+        s.speak("You can filter the list at the top.")
+        s.box.append("Open the menu and choose a line.")            # 자막이 여기서 마침표를 찍고 잠깐 멈춘다
+        s.feed(3)
+        s.box[-1] = "Open the menu and choose a line you are assigned to see only those calls."   # 말이 이어져 문장이 늘어남
+        s.feed(3)
+        s.speak("Then close the window when you are done.")
+        self.assertEqual(s.out[1], "Open the menu and choose a line.", s.out)
+        self.assertEqual(s.out[2], "You are assigned to see only those calls.")
+        self.assertEqual(len(s.out), 4)
+
+    def test_open_ended_sentence_waits(self):
+        s = self.s
+        s.feed(1)
+        s.box.append("From the Zoom app, tap on.")                  # 'on' 으로 끝남 = 아직 말하는 중
+        s.feed(3)
+        self.assertEqual(s.out, [])
+        s.box[-1] = "From the Zoom app, tap on the phone icon to see the subsections."
+        s.feed(3)
+        self.assertEqual(s.out, ["From the Zoom app, tap on the phone icon to see the subsections."])
+
+    def test_same_sentence_not_reread(self):
+        s = self.s
+        s.feed(1)
+        s.speak(A)
+        s.box[-1] = A.replace("an end user.", "an end user")       # 마침표만 바뀌는 건 늘어난 게 아니다
+        s.feed(3)
+        s.box[-1] = A
+        s.feed(3)
+        self.assertEqual(len(s.out), 1)
+
+
 class CleanupTest(unittest.TestCase):
     def test_strip_meta(self):
         """번역 뒤에 붙는 모델 설명을 뗀다 (v0.3.7)."""

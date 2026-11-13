@@ -316,6 +316,13 @@ class CaptionSegmenter:
         self.new_born = []    # 기준 뒤 새 문장들이 처음 나타난 시각 (차례대로). 되감기 때 옛 문장의 시각을 안 쓰게
         self.carry = None     # (짧은 문장, 시각, 처음 들린 시각)
         self.prev_out = ""    # 바로 앞에 내보낸 문장 (정규화) — 그 끝을 되풀이한 조각을 거른다
+        self.last_raw = None  # 마지막으로 내보낸 문장의 원래 글 — 자막이 그 문장을 뒤로 늘리면 늘어난 부분을 읽는다
+
+    # 11/13: 말하다 쉬면 실시간 자막이 'From the Zoom app, tap on.' 처럼 마침표를 찍어 두었다가 말이 이어지면 문장을 늘린다.
+    # 이런 말로 끝난 마지막 문장은 아직 안 끝난 것이니 더 기다린다.
+    WAIT_WORDS = DANGLING_WORDS = set("""a an the your our their my its and or of to be on in at for with by from that which
+        however but so because if when then is are can will""".split())
+    LAST_STABLE_OPEN = 5.0
 
     # 11/13: 실시간 자막이 문장을 고쳐 쓰는 도중의 조각이 그대로 읽혔다.
     #   '…for over a decade.' 다음에 'For over a decade.' 가 또 / 'Are integral to your.' / 'She wants to be a.'
@@ -342,6 +349,7 @@ class CaptionSegmenter:
         for k in done:
             self.emitted.append([k, now])
         self.last_key = done[-1] if done else None
+        self.last_raw = None
 
     FORGET = 20.0  # 자막 칸에서 사라지고 이만큼 지나면 '읽은 문장'에서 뺀다
 
@@ -374,9 +382,11 @@ class CaptionSegmenter:
         # 기준 찾기: 마지막으로 읽은 문장 → 못 찾으면(자막이 그 문장을 고쳐 썼을 때) 그 앞에 읽은 문장들 차례로.
         # 11/11: 예전엔 못 찾으면 '20초 넘게 지난 문장은 안 읽은 것'으로 쳐서, 칸에 남아 있던 옛 문장 10여 개를 뭉치로 다시 내보냈다
         # (지연 75~120초, 같은 문장을 세 번씩 → 목소리가 밀려 계속 건너뜀).
-        for anchor in [self.last_key] + [e[0] for e in reversed(self.emitted[-8:])]:
+        hit_last = False
+        for n_anchor, anchor in enumerate([self.last_key] + [e[0] for e in reversed(self.emitted[-8:])]):
             if not anchor:
                 continue
+            hit_last = n_anchor == 0
             for j in range(len(keys) - 1, -1, -1):  # 끝에서부터: 같은 문장이 두 번 보이면 나중 것이 기준
                 if keys[j] and self._same(keys[j], anchor):
                     start = j + 1
@@ -387,6 +397,18 @@ class CaptionSegmenter:
             # 읽은 문장이 칸에 하나도 안 보인다 (칸이 통째로 바뀜) → 옛 문장을 쏟아 내지 말고 지금부터 다시 시작
             self.prime(text)
             start = len(keys) if flat.endswith((".", "?", "!")) else len(keys) - 1
+        # 11/13: 내보낸 문장을 자막이 뒤로 늘렸으면 ('…tap on.' → '…tap on the phone icon to see the subsections.')
+        # 예전엔 '이미 읽은 문장'으로 쳐서 늘어난 부분이 통째로 빠졌다 (희랑: "그냥 생략하는 경우가 있다").
+        # → 늘어난 뒷부분만 새 문장처럼 내보낸다.
+        tail_at, tail = None, ""
+        if start is not None and hit_last and self.last_raw:
+            j = start - 1
+            head = self.last_raw.rstrip(".?!… ").lower()
+            full = sents[j].strip()
+            if len(head) >= 10 and full.lower().startswith(head) and len(full.rstrip(".?!… ")) - len(head) >= 8:
+                tail = full[len(head):].lstrip(" ,;:-")
+                if len(tail.split()) >= 2:
+                    tail_at, start = j, j
         if start is not None:  # 기준 뒤 새 문장 수에 맞춰 '처음 나타난 시각'을 늘리거나 줄인다
             n_new = len(sents) - start
             self.new_born = (self.new_born + [now] * n_new)[:n_new]
@@ -407,6 +429,8 @@ class CaptionSegmenter:
             age = now - self.seen[x]
             # 짧은 마지막 문장은 더 기다린다 — 'For over a decade.' 가 곧 'For over a decade, our Zoom Phone…' 으로 늘어난다
             hold = self.LAST_STABLE if len(x.split()) > 4 else self.LAST_STABLE_SHORT
+            if x.split()[-1].strip(".,?!").lower() in self.WAIT_WORDS:
+                hold = self.LAST_STABLE_OPEN
             ok = (x.endswith((".", "?", "!")) and age >= hold) if last else age >= self.STABLE
             if not ok:
                 break                  # 차례대로만 내보낸다 (뒤 문장이 먼저 나가면 앞 문장이 기준 앞으로 밀려 안 읽힘)
@@ -415,7 +439,12 @@ class CaptionSegmenter:
                 born = self.new_born.pop(0)   # 기준 바로 뒤 문장 = 새 문장 목록의 첫째
             self.emitted.append([key, now])
             self.last_key = key
+            self.last_raw = x.strip()
             start = i + 1
+            if i == tail_at:
+                tail_at = None
+                out += self._emit(tail[:1].upper() + tail[1:], now, now)
+                continue
             out += self._emit(x, now, born)
         # 오래된 기록 정리 (자막 칸에서 사라진 문장)
         self.seen = {k: t for k, t in self.seen.items() if k in alive}
