@@ -148,8 +148,17 @@ class SapiVoice:
         self.voice.Rate = max(-10, min(10, round((rate - 200) / 12)))
         self.voice.Volume = int(max(0, min(100, volume)))
         t = time.time()
-        self.voice.Speak(text, 0)  # 다 말할 때까지 기다림
+        # 11/13: 블루투스 헤드폰이 끊겼다 붙는 사이에 Speak 가 영영 안 돌아와서 목소리가 통째로 멈췄다.
+        # → 따로 말하게 하고(1=비동기) 글자 수에 맞춘 시간만 기다린다. 넘으면 끊고 다음 문장으로.
+        self.voice.Speak(text, 1)
+        limit = max(8.0, len(text) * 0.35)
+        if not self.voice.WaitUntilDone(int(limit * 1000)):
+            self.voice.Speak("", 3)  # 3 = 비동기 + 하던 말 지우기
+            raise TimeoutError(f"윈도우 목소리가 {limit:.0f}초 안에 안 끝남")
         return time.time() - t
+
+
+import ctypes  # EdgeVoice.say 의 재생 상태 읽기 (11/13)
 
 
 class EdgeVoice:
@@ -208,7 +217,23 @@ class EdgeVoice:
             self._mci(f"setaudio tts volume to {int(max(0, min(100, volume)) * 10)}", None, 0, None)
             if speed > 1.02:
                 self._mci(f"set tts speed {int(min(1.3, speed) * 1000)}", None, 0, None)
-            self._mci("play tts wait", None, 0, None)
+            # 11/13: 'play … wait' 는 소리 장치가 바뀌면(블루투스 헤드폰 재연결) 영영 안 돌아왔다 → 목소리가 통째로 죽음.
+            # → 기다리지 않고 틀고, 파일 길이 + 4초 안에 안 끝나면 끊는다.
+            buf = ctypes.create_unicode_buffer(32)
+            self._mci("status tts length", buf, 32, None)
+            try:
+                length = int(buf.value) / 1000 / max(1.0, speed)
+            except ValueError:
+                length = 15.0
+            self._mci("play tts", None, 0, None)
+            end = time.time() + length + 4
+            while time.time() < end:
+                time.sleep(0.05)
+                self._mci("status tts mode", buf, 32, None)
+                if buf.value not in ("playing", "seeking"):
+                    break
+            else:
+                raise TimeoutError("소리 재생이 안 끝남 (소리 장치 바뀜?)")
         finally:
             self._mci("close tts", None, 0, None)
             try:
@@ -694,6 +719,14 @@ class Reader:
                         t1 = time.time()
                         try:
                             return edge.say(text, vid, base, volume, speed=rate / base)
+                        except TimeoutError as e:
+                            if "재생" in str(e):  # 받는 건 됐는데 트는 데서 멈춤 → 서버 탓이 아니니 Edge 는 그대로 두고 이 문장만 넘긴다
+                                self._write([datetime.now().strftime("%H:%M:%S"), "", "목소리 멈춤", str(e)[:80], text[:40], ""])
+                                return 0.0
+                            err = e
+                            if time.time() - t1 > 2:
+                                break
+                            time.sleep(0.4)
                         except Exception as e:
                             err = e
                             if time.time() - t1 > 2:
@@ -705,7 +738,11 @@ class Reader:
                                  f"{type(err).__name__} {time.time() - t0:.1f}초 {str(err)[:80]}", text[:40], ""])
                 vid = "sapi:Heami"
             sapi.use(vid)
-            return sapi.say(text, rate, volume)
+            try:
+                return sapi.say(text, rate, volume)
+            except Exception as e:  # 11/13: 멈춘 재생은 끊고 다음 문장으로 (목소리가 통째로 죽지 않게)
+                self._write([datetime.now().strftime("%H:%M:%S"), "", "목소리 멈춤", str(e)[:80], text[:40], ""])
+                return 0.0
 
         while True:
             try:
