@@ -2,7 +2,7 @@
 
 앱의 /api/state 를 0.3초마다 읽어서, 지금 읽는 한국어(크게)와 영어 원문(작게)을 보여 준다.
 글자 크기·배경색·불투명도·영어 보이기·숨기기는 앱 창의 '자막 줄' 카드에서 바꾸고, 여기엔 바로 반영된다.
-  끌기 = 옮기기 (자리는 .overlay.json 에 기억) · 오른쪽 클릭 = 빠른 메뉴
+  끌기 = 옮기기 · 양쪽 끝 끌기 = 폭 바꾸기 (자리·폭은 .overlay.json 에 기억) · 오른쪽 클릭 = 빠른 메뉴
 
 배경만 반투명하고 글자는 또렷하게: 창을 두 겹으로 겹친다.
   아래 창(배경판) = 배경색, 불투명도 슬라이더 값만큼 투명
@@ -57,6 +57,13 @@ def key_for(hex_):
 
 
 class Overlay:
+    MIN_W = 360     # 자막 줄 최소 폭
+    EDGE = 14       # 가장자리에서 이만큼 안쪽까지 잡으면 폭 바꾸기
+    GRIP_SECS = 1.5 # 마우스가 움직인 뒤 손잡이를 이만큼 보여 준다
+
+    def default_w(self):
+        return min(int(self.sw * 0.62), 1400)
+
     def __init__(self):
         self.pref = load_pref()
         # 아래 창: 배경판
@@ -75,8 +82,18 @@ class Overlay:
         self.f_ko = tkfont.Font(family=self.fam, size=22, weight="bold")
         self.f_en = tkfont.Font(family=self.fam, size=11)
         sw, sh = bg.winfo_screenwidth(), bg.winfo_screenheight()
-        self.w = int(sw * 0.62)
-        self.x = self.pref.get("x", (sw - self.w) // 2)
+        self.sw = sw
+        # 11/14 폭: 화면의 62% 였는데 넓은 모니터(5760)에선 3571px 로 한 줄이 끝없이 길었다 → 기본 최대 1400px,
+        # 양쪽 가장자리를 마우스로 끌어 바꾸고 기억한다. 저장된 폭이 없던 예전 자리는 가운데를 그대로 둔다.
+        self.w = self.default_w()
+        old_w = int(sw * 0.62)
+        if "w" in self.pref:
+            self.w = max(self.MIN_W, min(int(self.pref["w"]), sw))
+            self.x = self.pref.get("x", (sw - self.w) // 2)
+        elif "x" in self.pref:
+            self.x = self.pref["x"] + (old_w - self.w) // 2
+        else:
+            self.x = (sw - self.w) // 2
         # 11/10 아래쪽 기준: 자막이 길어지거나 글자가 커지면 위로 자란다 (아랫변은 그 자리). 예전 설정(y)은 아랫변으로 바꿔 읽는다
         self.bottom = self.pref.get("bottom", self.pref["y"] + 114 if "y" in self.pref else sh - 116)
         self.y = self.bottom - 114
@@ -89,8 +106,11 @@ class Overlay:
         for wdg in (bg, top, self.cv):
             wdg.bind("<ButtonPress-1>", self._press)
             wdg.bind("<B1-Motion>", self._drag)
-            wdg.bind("<ButtonRelease-1>", lambda e: self._save())
+            wdg.bind("<ButtonRelease-1>", self._release)
             wdg.bind("<Button-3>", self._menu)
+            wdg.bind("<Motion>", self._hover)   # 가장자리면 ↔ 커서, 손잡이 잠깐 보이기
+        self._mode = "move"
+        self.grip_until = 0.0
 
         self.cfg = {}          # 지금 적용된 모양 설정
         self.shown = True
@@ -167,7 +187,13 @@ class Overlay:
         if self.cfg.get("overlay_en", True) and self.en_text:
             y = self._text(w // 2, 12, self.en_text, self.f_en, self.ink_en, w - 40, 1)
         y = self._text(w // 2, y + 4, self.ko_text or "…", self.f_ko, self.ink, w - 40, ring)
-        cv.configure(width=w, height=y + 12)
+        h = y + 12
+        if time.time() < self.grip_until:  # 폭 손잡이: 마우스를 올렸을 때만 양쪽 끝에 짧은 막대
+            gh = min(36, h - 20)
+            for gx in (7, w - 7):
+                cv.create_line(gx, (h - gh) // 2, gx, (h + gh) // 2, fill=self.ink_en, width=4, capstyle="round")
+        self._grips_drawn = time.time() < self.grip_until
+        cv.configure(width=w, height=h)
         self._sync()
 
     # ---- 모양 ----
@@ -195,14 +221,54 @@ class Overlay:
         self._draw()
         self._sync(force=True)
 
-    # ---- 끌기·메뉴 ----
+    # ---- 끌기(옮기기 / 양쪽 끝으로 폭 바꾸기)·메뉴 ----
+    def _edge(self, e):
+        """마우스가 자막 줄의 어디쯤인가: 'left' / 'right' 가장자리 또는 'move'."""
+        lx = e.x_root - self.x
+        w = self.top.winfo_width()
+        return "left" if lx <= self.EDGE else ("right" if lx >= w - self.EDGE else "move")
+
+    def _hover(self, e):
+        cur = "sb_h_double_arrow" if self._edge(e) != "move" else "fleur"
+        for wdg in (self.bgwin, self.top, self.cv):
+            if str(wdg.cget("cursor")) != cur:
+                wdg.configure(cursor=cur)
+        was = time.time() < self.grip_until
+        self.grip_until = time.time() + self.GRIP_SECS
+        if not was:
+            self._draw()  # 손잡이 보이기
+
     def _press(self, e):
+        self._mode = self._edge(e)
         self._dx, self._dy = e.x_root - self.x, e.y_root - self.y
+        self._start = (e.x_root, self.x, self.w)
 
     def _drag(self, e):
-        self.x, self.y = e.x_root - self._dx, e.y_root - self._dy
-        self.bottom = self.y + self.top.winfo_height()
-        self._sync()
+        self.grip_until = time.time() + self.GRIP_SECS
+        if self._mode == "move":
+            self.x, self.y = e.x_root - self._dx, e.y_root - self._dy
+            self.bottom = self.y + self.top.winfo_height()
+            self._sync()
+            return
+        x0, sx, sw_ = self._start
+        dx = e.x_root - x0
+        if self._mode == "right":
+            self.w = max(self.MIN_W, min(sw_ + dx, self.sw))
+        else:  # 왼쪽 끝: 오른쪽 끝은 그 자리, 왼쪽이 움직인다
+            self.w = max(self.MIN_W, min(sw_ - dx, self.sw))
+            self.x = sx + (sw_ - self.w)
+        self._draw()  # 새 폭으로 줄바꿈 다시
+
+    def _release(self, e):
+        self._mode = "move"
+        self._save()
+
+    def _reset_width(self):
+        center = self.x + self.w // 2
+        self.w = self.default_w()
+        self.x = center - self.w // 2
+        self._draw()
+        self._save()
 
     def _post(self, patch):
         try:
@@ -219,6 +285,7 @@ class Overlay:
         m.add_command(label="글자 작게", command=lambda: self._post({"overlay_size": max(14, size - 2)}))
         m.add_command(label="영어 원문 보이기/숨기기",
                       command=lambda: self._post({"overlay_en": not self.cfg.get("overlay_en", True)}))
+        m.add_command(label="폭 처음대로 (양쪽 끝을 끌어 바꿀 수 있어)", command=self._reset_width)
         m.add_separator()
         m.add_command(label="자막 줄 숨기기 (앱 창에서 다시 켜기)", command=lambda: self._post({"overlay_on": False}))
         m.tk_popup(e.x_root, e.y_root)
@@ -226,7 +293,7 @@ class Overlay:
     def _save(self):
         try:
             with open(PREF, "w", encoding="utf-8") as f:
-                json.dump({"x": self.x, "bottom": self.bottom}, f)
+                json.dump({"x": self.x, "bottom": self.bottom, "w": self.w}, f)
         except OSError:
             pass
 
@@ -259,6 +326,8 @@ class Overlay:
                 self.last_text, self.last_change = (ko, en), time.time()
                 self.ko_text, self.en_text = ko, en
                 self._draw()
+            if getattr(self, "_grips_drawn", False) and time.time() >= self.grip_until:
+                self._draw()  # 마우스가 떠나고 잠깐 지나면 손잡이 감추기
             if self.shown:
                 self._sync()
         except Exception:
