@@ -218,6 +218,9 @@ def norm(s):
     return "".join(ch for ch in s.lower() if ch.isalnum())
 
 
+LAUNCHED_AT = [0.0]  # 이 앱이 실시간 자막을 마지막으로 새로 켠 시각 (11/18: 막 켠 건 8초쯤 못 알아듣는다)
+
+
 def find_caption_box(launch=False):
     """윈도우 실시간 자막 창의 글자 칸. 없으면 (launch=True일 때) 실시간 자막을 켜 본다."""
     win = auto.WindowControl(searchDepth=1, ClassName="LiveCaptionsDesktopWindow")
@@ -234,6 +237,7 @@ def find_caption_box(launch=False):
             time.sleep(1.5)
         try:
             subprocess.Popen(["LiveCaptions.exe"])  # 윈도우 기본 프로그램 (Win+Ctrl+L 과 같음)
+            LAUNCHED_AT[0] = time.time()
         except OSError:
             return None
         if not win.Exists(15, 0.5):  # 새로 켜면 창이 뜨기까지 6초 넘게 걸리기도 한다 (11/10)

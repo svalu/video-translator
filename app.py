@@ -91,7 +91,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/screen":
             screen_req[0] += 1
         elif self.path == "/api/update":
-            reader.stop()
+            reader.stop(closing=True)
             updater.run_update()  # 업데이트.bat 이 이 앱을 끄고 새 판으로 다시 켠다
         elif self.path == "/api/open-logs":
             os.startfile(os.path.join(HERE, "logs"))
@@ -225,7 +225,7 @@ def main():
         if "--no-window" not in sys.argv:
             open_window(url)
         _wait_until_window_gone()
-    reader.stop()
+    reader.stop(closing=True)
     server.shutdown()
     print("끝")
 

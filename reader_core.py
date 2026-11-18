@@ -15,6 +15,7 @@ import uiautomation as auto
 
 from step3_read_translation import SentenceFinalizer, find_window, read_current
 from step4_speak_translation import covered, fragment_reason, new_korean_part
+import local_pipeline
 from local_pipeline import CaptionSegmenter, LocalTranslator, find_caption_box, hide_caption_window
 
 from paths import DATA as HERE  # 설정·기록·임시 소리를 쓰는 곳 (paths.py)
@@ -303,7 +304,7 @@ class Reader:
             return "captions" if captions_available() else "whisper"
         return ear
 
-    def stop(self):
+    def stop(self, closing=False):
         with self.lock:
             self.running = False
             self._stop.set()
@@ -315,9 +316,11 @@ class Reader:
             if self._log_file:
                 self._log_file.close()
                 self._log_file = None
-        # 11/10: 예전엔 멈추면 숨겼던 회색 실시간 자막 창을 되돌렸는데, 접기도 안 되는 창이 화면에 남아 거슬렸다.
-        # 다시 '읽기 시작'하면 앱이 알아서 켜고 숨기니까(v0.3.10) 멈출 땐 아예 끈다.
-        if self.ear_mode() != "whisper":
+        # 11/10: 예전엔 멈추면 숨겼던 회색 실시간 자막 창을 되돌렸는데, 접기도 안 되는 창이 화면에 남아 거슬렸다 → 멈출 때 껐다.
+        # 11/18: 그런데 새로 켠 실시간 자막은 '준비 완료'라고 떠도 8초쯤 못 알아듣는다 (처음 5.7초 통째로 빠짐, 4초 뒤엔 엉터리,
+        # 8초 뒤·켜 둔 것은 바로). 멈췄다 다시 시작할 때마다 강의 처음이 빠졌다(희랑).
+        # → 앱이 켜져 있는 동안은 숨긴 채로 켜 두고, 앱을 닫거나 업데이트할 때만 끈다.
+        if closing and self.ear_mode() != "whisper":
             threading.Thread(target=restart_live_captions).start()  # 앱을 닫을 때도 끝까지 끄게 daemon 아님
         tr = getattr(self, "_translator", None)
         if tr:
@@ -538,11 +541,17 @@ class Reader:
             self._end()
             if box is None or self._stop.is_set():
                 return  # 11/11: 모델 올리는 중에 멈추면 '듣는 중'으로 덮어쓰던 것
-            self.status = f"듣는 중 · 내 PC 번역"
             try:
                 hide_caption_window()  # 한국어 자막 줄이 대신 보여 주니까 회색 영어 창은 숨긴다
             except Exception:
                 pass
+            if time.time() - local_pipeline.LAUNCHED_AT[0] < 30:  # 막 새로 켠 실시간 자막
+                self._begin("ear_check", "실시간 자막 귀 확인 중 · 영어가 잠깐 들려")
+                self._ear_check(box)
+                self._end()
+                if self._stop.is_set():
+                    return
+            self._ready_signal()
             seg = CaptionSegmenter()
             try:
                 seg.prime(box.Name or "")
@@ -627,6 +636,56 @@ class Reader:
                             pass
                         self.status = "듣는 중 · 내 PC 번역"
                 time.sleep(0.3)
+
+    READY_TEXT = "Ready to translate."
+
+    def _ear_check(self, box):
+        """11/18: 새로 켠 실시간 자막이 진짜 알아듣는지 짧은 영어를 틀어 보고, 받아 적을 때까지 기다린다.
+        '준비 완료'라는 글은 믿을 수 없었다 (그 뒤로도 8초쯤 처음 말을 놓치거나 엉터리로 적음)."""
+        import ctypes
+        mp3 = os.path.join(HERE, ".tts", "ready_check.mp3")
+        if not os.path.exists(mp3):
+            try:
+                import asyncio
+                import edge_tts
+                os.makedirs(os.path.dirname(mp3), exist_ok=True)
+                asyncio.run(asyncio.wait_for(edge_tts.Communicate(self.READY_TEXT, "en-US-AndrewNeural").save(mp3), timeout=6))
+            except Exception:
+                try:
+                    os.remove(mp3)
+                except OSError:
+                    pass
+        if not os.path.exists(mp3):  # 목소리를 못 받으면 소리 없이 시간만 기다린다
+            self._stop.wait(max(0.0, local_pipeline.LAUNCHED_AT[0] + 9 - time.time()))
+            return False
+        mci = ctypes.windll.winmm.mciSendStringW
+        end = time.time() + 25
+        while time.time() < end and not self._stop.is_set():
+            mci(f'open "{mp3}" type mpegvideo alias earcheck', None, 0, None)
+            mci("play earcheck", None, 0, None)
+            until = time.time() + 3.5
+            while time.time() < until and not self._stop.is_set():
+                try:
+                    heard = (box.Name or "").lower()
+                except Exception:
+                    heard = ""
+                if "ready" in heard and "translat" in heard:  # 문장을 거의 다 알아들었을 때만 준비 끝
+                    mci("close earcheck", None, 0, None)
+                    self._stop.wait(0.8)  # 실시간 자막이 마침표를 찍을 틈
+                    return True
+                time.sleep(0.2)
+            mci("close earcheck", None, 0, None)
+        return False
+
+    def _ready_signal(self):
+        """완전히 준비됐다는 표시: 딩 소리 + 상태 + 자막 줄 글 (첫 문장이 오면 덮인다)."""
+        import ctypes
+        try:
+            ctypes.windll.user32.MessageBeep(0x40)  # 윈도우 '알림' 소리
+        except Exception:
+            pass
+        self.status = "준비 끝 · 이제 영상 틀어도 돼 · 듣는 중 · 내 PC 번역"
+        self.current = {"en": "", "ko": "준비 끝 · 이제 영상 틀어도 돼"}
 
     def _find_box_hard(self):
         """실시간 자막 창을 찾는다. 못 찾으면 앱이 직접 껐다 켠다. 멈추면 None.
