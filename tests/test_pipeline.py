@@ -262,6 +262,12 @@ class CleanupTest(unittest.TestCase):
         import screen_translate as st
         from PIL import Image, ImageDraw
         self.assertEqual(st.clean_ocr("Seer StandaIone lncludes whO SpotIight"), "Seer Standalone Includes who Spotlight")
+        self.assertEqual(st.clean_ocr("current tOOIs and ROI"), "current tools and ROI")
+        # 번호 목록 '1.' '2.' 은 OCR 조각으로 온다
+        num = [{"text": "1.", "x": 60, "y": 400, "w": 30, "h": 30}, {"text": "2.", "x": 60, "y": 445, "w": 30, "h": 30},
+               {"text": "Survey fatigue", "x": 140, "y": 400, "w": 300, "h": 32}, {"text": "Rising attrition", "x": 140, "y": 445, "w": 300, "h": 32}]
+        nb = st.group_blocks(st.mark_bullets(Image.new("RGB", (600, 600), "white"), num))
+        self.assertEqual([b["text"] for b in nb], ["Survey fatigue", "Rising attrition"])
         # 글머리표 세 줄 = 칸 세 개, 글머리표 없는 이어진 문장 두 줄 = 칸 하나
         img = Image.new("RGB", (600, 400), "white")
         d = ImageDraw.Draw(img)

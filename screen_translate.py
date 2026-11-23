@@ -77,6 +77,7 @@ def clean_ocr(t):
     t = re.sub(r"(?<=[a-z])I(?=[a-z])", "l", t)                       # StandaIone → Standalone
     t = re.sub(r"\bl(?=[bcdfghjkmnpqrstvwxz])", "I", t)                # lncludes → Includes
     t = re.sub(r"(?<=[a-z])O\b", "o", t)                               # whO → who
+    t = re.sub(r"\b[a-z][A-Za-z]*\b", lambda m: m.group(0).replace("O", "o").replace("I", "l"), t)  # tOOIs → tools
     t = re.sub(r"[가-힣]", "?", t)                                      # 남은 한글 한 글자 = 못 읽은 글자
     return t
 
@@ -130,8 +131,14 @@ def group_blocks(lines, top_skip=0):
 def mark_bullets(img, lines):
     """11/23: 글머리표(•, ○)는 OCR 이 못 읽거나 '0' 으로 읽고 버려져서, 목록 항목들이 한 문단으로 붙었다
     ('직원 참여 설문조사 설문조사 분석' 처럼 항목이 섞이고 칸이 밀림). → 줄 왼쪽 바로 옆에 작은 점 덩어리가 있으면 글머리표 줄."""
+    marks = [m for m in lines if re.fullmatch(r"\s*(?:\d{1,2}[.)]|[0oO•·○●▪■-])\s*", m["text"])]
     for ln in lines:
         h = max(8, ln["h"])
+        cy = ln["y"] + ln["h"] / 2
+        # 11/23: '1. 2. 3.' 번호 목록 — 번호를 OCR 이 따로 읽어 두니 그걸로 본다 (4·5번이 앞 항목에 붙어 사라졌다)
+        if any(m is not ln and abs(m["y"] + m["h"] / 2 - cy) < h * 0.5 and 0 < ln["x"] - (m["x"] + m["w"]) < h * 3.5 for m in marks):
+            ln["bullet"] = True
+            continue
         x0, x1 = int(ln["x"] - h * 2.6), int(ln["x"] - h * 0.25)
         y0, y1 = int(ln["y"] + h * 0.1), int(ln["y"] + h * 0.9)
         if x0 < 0 or x1 - x0 < 4:
@@ -509,16 +516,20 @@ class ScreenTranslator:
             base = img.convert("L").resize((max(1, img.width // 8), max(1, img.height // 8)))
             texts = [b["text"] for b in blocks]
 
-            def progress():
+            # 11/23 희랑: "깜빡거리면서 한 번은 이상하게 떠. 늦게 뜨더라도 처음 그 부분은 안 나왔으면."
+            # → 중간에 반쯤 된 덮개를 그리지 않는다. 진행은 알림 글로만, 덮개는 다 끝나면 한 번.
+            def progress(final=False):
                 for b in blocks:
                     b["ko"] = _cache.get(b["text"], "")
                 done = sum(1 for b in blocks if b["ko"])
-                self.events.put(("draw", (rect, [dict(b) for b in blocks], base, time.time() - t0, done, len(blocks))))
+                if final:
+                    self.events.put(("draw", (rect, [dict(b) for b in blocks], base, time.time() - t0, done, done)))
+                else:
+                    self.events.put(("toast", f"번역 중… {done}/{len(blocks)}칸"))
 
-            self.events.put(("toast", f"번역 중… 0/{len(blocks)}칸"))
-            progress()  # 캐시에 있던 칸은 바로
-            translate_blocks(texts, self.model, size=4, on_progress=progress, context=texts)
             progress()
+            translate_blocks(texts, self.model, size=4, on_progress=progress, context=texts)
+            progress(final=True)
             self.events.put(("done", time.time() - t0))
         except Exception as e:
             self.events.put(("toast", f"화면 번역 실패: {type(e).__name__}"))
