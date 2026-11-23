@@ -117,7 +117,11 @@ def render(size, blocks, key=(255, 0, 254)):
         bx1 = max(b["x"] + b["w"], x0 + dr["w"]) + pad
         by0 = b["y"] - pad
         by1 = b["y"] + max(b["h"], dr["h"]) + pad
-        d.rectangle([bx0, by0, bx1, by1], fill=b["bg"])
+        if b.get("bg_img") is not None:  # 그러데이션 배경을 따라 칠한 판 (11/23)
+            size = (max(1, int(bx1 - bx0)), max(1, int(by1 - by0)))
+            img.paste(b["bg_img"].resize(size), (int(bx0), int(by0)))
+        else:
+            d.rectangle([bx0, by0, bx1, by1], fill=b["bg"])
         y = b["y"] + (b["line_h"] - dr["px"]) * 0.35
         for ln in dr["lines"]:
             lw = d.textlength(ln, font=dr["font"])

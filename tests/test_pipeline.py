@@ -258,6 +258,24 @@ class CleanupTest(unittest.TestCase):
         long = "Our Zoom Phone inherits the same reliable technology that has been integral to the success of."
         self.assertEqual([e for e, _ in seg._emit(long, 7, 7)], [long])            # 긴 문장은 끝이 끊겨도 읽는다
 
+    def test_screen_ocr_fixes_and_bullets(self):
+        import screen_translate as st
+        from PIL import Image, ImageDraw
+        self.assertEqual(st.clean_ocr("Seer StandaIone lncludes whO SpotIight"), "Seer Standalone Includes who Spotlight")
+        # 글머리표 세 줄 = 칸 세 개, 글머리표 없는 이어진 문장 두 줄 = 칸 하나
+        img = Image.new("RGB", (600, 400), "white")
+        d = ImageDraw.Draw(img)
+        lines = []
+        for i, t in enumerate(["Surveys", "Analytics", "Values"]):
+            y = 40 + i * 45
+            d.ellipse((70, y + 10, 80, y + 20), fill="black")
+            lines.append({"text": t, "x": 100, "y": y, "w": 120, "h": 30})
+        lines += [{"text": "Dedicated employee listening", "x": 100, "y": 250, "w": 300, "h": 30},
+                  {"text": "platform for customers", "x": 100, "y": 293, "w": 250, "h": 30}]
+        blocks = st.group_blocks(st.mark_bullets(img, lines))
+        self.assertEqual([b["text"] for b in blocks],
+                         ["Surveys", "Analytics", "Values", "Dedicated employee listening platform for customers"])
+
     def test_restore_names(self):
         """한글로 바뀐 제품 이름을 되돌린다 (v0.5.1). 원문에 있을 때만."""
         r = lp.restore_names

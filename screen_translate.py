@@ -74,6 +74,9 @@ def clean_ocr(t):
     t = re.sub(r"\b2417\b", "24/7", t)
     t = re.sub(r"\b(\d{2,3})0?7\.", r"\1%", t)  # 1007. → 100%  (% 를 7 로 읽음)
     t = t.replace("『", "r").replace("』", "l")
+    t = re.sub(r"(?<=[a-z])I(?=[a-z])", "l", t)                       # StandaIone → Standalone
+    t = re.sub(r"\bl(?=[bcdfghjkmnpqrstvwxz])", "I", t)                # lncludes → Includes
+    t = re.sub(r"(?<=[a-z])O\b", "o", t)                               # whO → who
     t = re.sub(r"[가-힣]", "?", t)                                      # 남은 한글 한 글자 = 못 읽은 글자
     return t
 
@@ -106,7 +109,7 @@ def group_blocks(lines, top_skip=0):
             h = statistics.median(l["h"] for l in b["lines"])
             same_col = abs(ln["x"] - b["lines"][0]["x"]) < max(h * 1.6, 30) or (ln["x"] > b["x"] and ln["x"] < b["x"] + b["w"] * 0.3)
             gap = ln["y"] - (last["y"] + last["h"])
-            if same_col and -h * 0.5 < gap < h * 0.95 and 0.7 < ln["h"] / h < 1.4 and not _BULLET.match(ln["text"]):
+            if same_col and -h * 0.5 < gap < h * 0.95 and 0.7 < ln["h"] / h < 1.4 and not _BULLET.match(ln["text"]) and not ln.get("bullet"):
                 b["lines"].append(ln)
                 placed = True
                 break
@@ -122,6 +125,67 @@ def group_blocks(lines, top_skip=0):
         b["text"] = " ".join(l["text"].strip() for l in b["lines"])
         b["line_h"] = statistics.median(l["h"] for l in b["lines"])
     return blocks
+
+
+def mark_bullets(img, lines):
+    """11/23: 글머리표(•, ○)는 OCR 이 못 읽거나 '0' 으로 읽고 버려져서, 목록 항목들이 한 문단으로 붙었다
+    ('직원 참여 설문조사 설문조사 분석' 처럼 항목이 섞이고 칸이 밀림). → 줄 왼쪽 바로 옆에 작은 점 덩어리가 있으면 글머리표 줄."""
+    for ln in lines:
+        h = max(8, ln["h"])
+        x0, x1 = int(ln["x"] - h * 2.6), int(ln["x"] - h * 0.25)
+        y0, y1 = int(ln["y"] + h * 0.1), int(ln["y"] + h * 0.9)
+        if x0 < 0 or x1 - x0 < 4:
+            continue
+        crop = img.crop((x0, y0, x1, y1)).convert("L")
+        px = list(crop.getdata())
+        bg = statistics.median(px)
+        W = crop.width
+        hit = [i for i, v in enumerate(px) if abs(v - bg) > 70]
+        if not hit or len(hit) > len(px) * 0.35:
+            continue
+        cols = [i % W for i in hit]
+        rows = [i // W for i in hit]
+        bw, bh = max(cols) - min(cols) + 1, max(rows) - min(rows) + 1
+        if bw <= h * 0.8 and bh <= h * 0.8 and len(hit) >= 4:  # 글자 하나보다 작은 한 덩어리
+            ln["bullet"] = True
+    return lines
+
+
+def _run_median(vals, win):
+    half = win // 2
+    return [statistics.median(vals[max(0, k - half):k + half + 1]) for k in range(len(vals))]
+
+
+def bg_patch(img, x, y, w, h, pad=3):
+    """11/23: 그러데이션 배경(주황→분홍) 위에 단색 판을 덮으니 네모가 티 났다.
+    → 칸 바로 바깥 위·아래 띠의 색을 세로로 섞은 판. 띠에 걸친 글자 조각은 가로 중앙값으로 지운다.
+    단색 배경이면 None (그냥 단색 판이 더 깔끔)."""
+    from PIL import Image, ImageFilter
+    gap = 4  # 글자 끝(꼬리·점)이 띠에 안 걸리게 칸에서 조금 떨어진 곳을 본다
+    W = int(w + pad * 2)
+    x0 = int(max(0, x - pad))
+    W = min(W, img.width - x0)
+    yt0, yt1 = int(max(0, y - pad - gap - 3)), int(max(1, y - pad - gap))
+    yb0, yb1 = int(min(img.height - 1, y + h + pad + gap)), int(min(img.height, y + h + pad + gap + 3))
+    if W < 2 or yt1 <= yt0 or yb1 <= yb0:
+        return None
+    rgb = img.convert("RGB")
+    win = max(5, min(61, W // 6) | 1)
+
+    def strip(y0, y1):
+        row = rgb.crop((x0, y0, x0 + W, y1)).resize((W, 1), Image.BOX).getdata()
+        return list(zip(*[_run_median([c[k] for c in row], win) for k in range(3)]))
+
+    top, bot = strip(yt0, yt1), strip(yb0, yb1)
+    allc = top + bot
+    spread = max(max(c[k] for c in allc) - min(c[k] for c in allc) for k in range(3))
+    if spread < 18:
+        return None
+    H = int(h + pad * 2)
+    t = Image.new("RGB", (W, 1)); t.putdata([tuple(int(v) for v in c) for c in top])
+    b = Image.new("RGB", (W, 1)); b.putdata([tuple(int(v) for v in c) for c in bot])
+    mask = Image.linear_gradient("L").resize((W, H))
+    return Image.composite(b.resize((W, H)), t.resize((W, H)), mask).filter(ImageFilter.GaussianBlur(2))
 
 
 # ---------- 번역 ----------
@@ -175,7 +239,31 @@ def tidy(src, ko):
 # 슬라이드 글자는 구글로 나간다 (희랑이 11/10 이 방식을 골랐다). 말 번역(동시통역)은 계속 EXAONE.
 GOOGLE = "https://translate.googleapis.com/translate_a/t?client=gtx&sl=en&tl=ko&format=text"
 # 구글이 제품 이름까지 한국어로 옮길 때 되돌린다 (Copilot → '부조종사' 를 실제로 들었다)
-_FIX = {"부조종사": "Copilot", "젠데스크": "Zendesk", "젠 데스크": "Zendesk"}
+_FIX = {"부조종사": "Copilot", "젠데스크": "Zendesk", "젠 데스크": "Zendesk",
+        "예언자": "Seer", "워크비보": "Workvivo"}  # 11/23 Workvivo 의 Seer 를 '예언자'로
+
+
+# 11/23: 목록을 항목별로 나눴더니 한 단어짜리가 맥락 없이 옮겨졌다 (Analytics→해석학, Spaces→공백, Journeys→여행).
+# 제품 기능 이름은 영어 그대로, 나머지 짧은 항목은 줄바꿈으로 이어 한 번에 보내 서로 맥락이 되게 한다.
+KEEP = {"Spaces", "Journeys", "Spotlight", "Seer", "Workvivo", "Zoom", "Zendesk", "Copilot"}
+
+
+def _is_short(t):
+    return len(t.split()) <= 3 and not t.rstrip().endswith((".", "?", "!"))
+
+
+def _google_list(chunk):
+    """짧은 항목들을 줄바꿈으로 이어 한 번에. 줄 수가 안 맞으면 따로따로."""
+    got = _google(["\n".join(chunk)])
+    lines = (got.get(1) or "").split("\n")
+    if len(lines) != len(chunk):
+        return _google(chunk)
+    out = {}
+    for n, (src, ko) in enumerate(zip(chunk, lines), 1):
+        ko = tidy(src, ko)
+        if ko:
+            out[n] = ko
+    return out
 
 
 def _google(chunk):
@@ -200,12 +288,18 @@ def _google(chunk):
 def translate_blocks(texts, model, size=14, on_progress=None, context=None):
     """11/08: EXAONE 이 여러 블록을 받으면 2번을 1번 아래 들여쓰기로 붙이고 번호를 빼먹어서 빈칸이 됐다.
     → 짝이 안 맞은 블록만 하나씩 다시 묻는다. 빈 번역은 캐시에 안 넣는다(다음에 누르면 다시 시도)."""
+    for t in texts:
+        if t.strip() in KEEP:
+            _cache[t] = t.strip()
     todo = [t for t in dict.fromkeys(texts) if t not in _cache]
     try:
-        for i in range(0, len(todo), 40):
-            chunk = todo[i:i + 40]
-            for n, ko in _google(chunk).items():
-                _cache[chunk[n - 1]] = ko
+        short = [t for t in todo if _is_short(t)]
+        long_ = [t for t in todo if not _is_short(t)]
+        for group, fn in ((long_, _google), (short, _google_list)):
+            for i in range(0, len(group), 40):
+                chunk = group[i:i + 40]
+                for n, ko in fn(chunk).items():
+                    _cache[chunk[n - 1]] = ko
         if on_progress:
             on_progress()
         todo = [t for t in todo if t not in _cache]  # 구글이 빈칸으로 돌려준 것만 EXAONE 으로
@@ -401,7 +495,7 @@ class ScreenTranslator:
             from screen_ocr import read_lines
             t0 = time.time()
             img = ImageGrab.grab(rect, all_screens=True)
-            blocks = group_blocks(read_lines(img), top_skip=self._chrome_height(rect))
+            blocks = group_blocks(mark_bullets(img, read_lines(img)), top_skip=self._chrome_height(rect))
             if not blocks:
                 self.events.put(("toast", "영어 글자를 못 찾았어요"))
                 self.busy = False
@@ -411,6 +505,7 @@ class ScreenTranslator:
             blocks.sort(key=lambda b: (round(b["y"] / 12), b["x"]))
             for b in blocks:
                 b["bg"], b["fg"] = box_colors(img, int(b["x"]), int(b["y"]), int(b["w"]), int(b["h"]))
+                b["bg_img"] = bg_patch(img, int(b["x"]), int(b["y"]), int(b["w"]), int(b["h"]))
             base = img.convert("L").resize((max(1, img.width // 8), max(1, img.height // 8)))
             texts = [b["text"] for b in blocks]
 

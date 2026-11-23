@@ -6,7 +6,7 @@
 const GOOGLE = "https://translate.googleapis.com/translate_a/t?client=gtx&sl=auto&tl=ko&format=text";
 const cache = new Map();          // 영어 → 한국어 (서비스 워커가 살아 있는 동안)
 // 구글이 제품 이름까지 옮길 때 되돌린다 (통역기에서 실제로 본 것들)
-const FIX = [["부조종사", "Copilot"], ["젠데스크", "Zendesk"], ["젠 데스크", "Zendesk"]];
+const FIX = [["부조종사", "Copilot"], ["젠데스크", "Zendesk"], ["젠 데스크", "Zendesk"], ["예언자", "Seer"], ["워크비보", "Workvivo"]];
 
 async function translate(texts) {
   const out = new Array(texts.length).fill("");
