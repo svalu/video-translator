@@ -545,12 +545,28 @@ class Reader:
                 hide_caption_window()  # 한국어 자막 줄이 대신 보여 주니까 회색 영어 창은 숨긴다
             except Exception:
                 pass
-            if time.time() - local_pipeline.LAUNCHED_AT[0] < 30:  # 막 새로 켠 실시간 자막
-                self._begin("ear_check", "실시간 자막 귀 확인 중 · 영어가 잠깐 들려")
-                self._ear_check(box)
-                self._end()
-                if self._stop.is_set():
+            # 11/24 희랑: "동시 통역이 다시 틀 때 뭔가 문제가 있네." 기록 16:05 시작 → 16:06:44 감시가 '멈춤'으로 다시 켬 → 첫 문장 16:07:09.
+            # 켜 둔 실시간 자막(11/18)이 쉬는 동안 귀가 먹어 있었고, 20초 감시가 잡을 때까지 강의가 빠졌다.
+            # → 켜 둔 것도 시작할 때마다 듣는지 본다. 못 들으면 바로 껐다 켜고 새로 켠 것처럼 귀 확인.
+            fresh = time.time() - local_pipeline.LAUNCHED_AT[0] < 30  # 막 새로 켠 실시간 자막
+            self._begin("ear_check", "실시간 자막 귀 확인 중 · 영어가 잠깐 들려")
+            if not fresh and not self._ear_alive(box) and not self._stop.is_set():
+                self._write([datetime.now().strftime("%H:%M:%S"), "", "자막 다시 켬", "시작할 때 못 들음", "", ""])
+                restart_live_captions()
+                box = self._find_box_hard()
+                if box is None:
+                    self._end()
                     return
+                try:
+                    hide_caption_window()
+                except Exception:
+                    pass
+                fresh = True
+            if fresh:
+                self._ear_check(box)
+            self._end()
+            if self._stop.is_set():
+                return
             self._ready_signal()
             seg = CaptionSegmenter()
             try:
@@ -639,7 +655,26 @@ class Reader:
 
     READY_TEXT = "Ready to translate."
 
-    def _ear_check(self, box):
+    def _ear_alive(self, box):
+        """켜 둔 실시간 자막이 지금 듣고 있나. 이미 영상이 나오고 있어 글자가 움직이면 소리 없이 통과,
+        조용하면 짧은 영어를 한 번 틀어 본다. 확인할 목소리 파일이 없으면 믿고 넘어간다."""
+        try:
+            base = box.Name or ""
+        except Exception:
+            return False
+        until = time.time() + 1.5
+        while time.time() < until and not self._stop.is_set():
+            try:
+                if (box.Name or "") != base:
+                    return True
+            except Exception:
+                return False
+            time.sleep(0.2)
+        if not os.path.exists(os.path.join(HERE, ".tts", "ready_check.mp3")):
+            return True
+        return self._ear_check(box, secs=3)
+
+    def _ear_check(self, box, secs=25):
         """11/18: 새로 켠 실시간 자막이 진짜 알아듣는지 짧은 영어를 틀어 보고, 받아 적을 때까지 기다린다.
         '준비 완료'라는 글은 믿을 수 없었다 (그 뒤로도 8초쯤 처음 말을 놓치거나 엉터리로 적음)."""
         import ctypes
@@ -659,7 +694,11 @@ class Reader:
             self._stop.wait(max(0.0, local_pipeline.LAUNCHED_AT[0] + 9 - time.time()))
             return False
         mci = ctypes.windll.winmm.mciSendStringW
-        end = time.time() + 25
+        try:
+            base = box.Name or ""  # 켜 둔 자막 칸엔 지난번 'Ready to translate.' 가 남아 있다 → 새로 적힌 것만 친다
+        except Exception:
+            base = ""
+        end = time.time() + secs
         while time.time() < end and not self._stop.is_set():
             mci(f'open "{mp3}" type mpegvideo alias earcheck', None, 0, None)
             mci("play earcheck", None, 0, None)
@@ -669,7 +708,8 @@ class Reader:
                     heard = (box.Name or "").lower()
                 except Exception:
                     heard = ""
-                if "ready" in heard and "translat" in heard:  # 문장을 거의 다 알아들었을 때만 준비 끝
+                tail = heard[-60:]
+                if heard != base.lower() and "ready" in tail and "translat" in tail:  # 문장을 거의 다 알아들었을 때만 준비 끝
                     mci("close earcheck", None, 0, None)
                     self._stop.wait(0.8)  # 실시간 자막이 마침표를 찍을 틈
                     return True
